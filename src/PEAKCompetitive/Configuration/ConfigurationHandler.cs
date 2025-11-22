@@ -18,6 +18,8 @@ namespace PEAKCompetitive.Configuration
         // Match Settings
         public static bool ItemsPersist { get; private set; }
         public static bool ShowScoreboard { get; private set; }
+        public static float IndividualCompletionMultiplier { get; private set; }
+        public static bool EnableFullTeamBonus { get; private set; }
 
         // Map Point Values (host configurable)
         public static int Map1Points { get; set; }
@@ -94,6 +96,25 @@ namespace PEAKCompetitive.Configuration
                 "Display scoreboard during match"
             );
             ShowScoreboard = showScoreboardEntry.Value;
+
+            var individualCompletionMultiplierEntry = config.Bind(
+                "Match",
+                "IndividualCompletionMultiplier",
+                0.5f,
+                new ConfigDescription(
+                    "Points multiplier per living team member (0 = disabled, 0.5 = half points per member, 1.0 = full points per member)",
+                    new AcceptableValueRange<float>(0f, 2.0f)
+                )
+            );
+            IndividualCompletionMultiplier = individualCompletionMultiplierEntry.Value;
+
+            var enableFullTeamBonusEntry = config.Bind(
+                "Match",
+                "EnableFullTeamBonus",
+                true,
+                "Award bonus points when entire team reaches checkpoint alive (bonus = base map points)"
+            );
+            EnableFullTeamBonus = enableFullTeamBonusEntry.Value;
 
             // Map Point Values
             var map1PointsEntry = config.Bind(

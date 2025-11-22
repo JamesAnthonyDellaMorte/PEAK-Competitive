@@ -130,59 +130,152 @@ Ghost Abilities:
 
 ### Point Award Rules
 
-1. **Normal Round Win:**
-   - First team to checkpoint gets full points
-   - Example: Win Caldera round = +4 points
+1. **Base Round Win:**
+   - First team to checkpoint gets base points
+   - Example: Win Caldera round = +4 base points
 
-2. **All Teams Die:**
-   - Team with highest current score gets points
+2. **Individual Completion Bonus:**
+   - EACH living team member that reaches checkpoint = +bonus points
+   - Bonus = base points × 0.5 (configurable multiplier)
+   - Example: Caldera (4pts base) with 2 living teammates = 4 + (4×0.5×2) = 8 total points
+   - Creates incentive to keep all teammates alive!
+
+3. **Full Team Bonus:**
+   - If ALL team members reach checkpoint alive = additional multiplier
+   - Full team bonus = base points × 1.0
+   - Example: Caldera (4pts) with all teammates alive = 4 (base) + 4 (individual: 4×0.5×2) + 4 (full team) = 12 points!
+
+4. **Scoring Formula:**
+   ```
+   Total Points = Base Points + (Base × Individual Multiplier × Living Members) + (Full Team Bonus if all alive)
+
+   Where:
+   - Base Points = map difficulty value
+   - Individual Multiplier = 0.5 (configurable)
+   - Living Members = count of alive teammates at checkpoint
+   - Full Team Bonus = Base Points (if all members alive)
+   ```
+
+5. **Example Scenarios:**
+
+   **Scenario A: Both teammates alive (Caldera = 4pts base)**
+   - Base: 4 points
+   - Individual: 4 × 0.5 × 2 = 4 points
+   - Full Team: 4 points
+   - **Total: 12 points**
+
+   **Scenario B: One teammate died (Caldera = 4pts base)**
+   - Base: 4 points
+   - Individual: 4 × 0.5 × 1 = 2 points
+   - Full Team: 0 points (not all alive)
+   - **Total: 6 points**
+
+   **Scenario C: Both died but team had lead (Caldera = 4pts base)**
+   - Leading team gets only base points (no bonuses)
+   - **Total: 4 points**
+
+6. **All Teams Die:**
+   - Team with highest current score gets base points only
+   - No individual or full team bonuses
    - Prevents stalling/griefing
-   - Rewards leading team
 
-3. **Match End at Kiln:**
-   - No additional points for reaching Kiln
+7. **Match End at Kiln:**
    - Total accumulated points determine winner
-   - Tiebreaker: First team to Kiln wins
+   - Tiebreaker: Team with most individual completions wins
+   - Second tiebreaker: First team to Kiln wins
 
 ---
 
 ## Match Scenarios
 
-### Scenario 1: Clean Victory
+### Scenario 1: Perfect Victory (All Teammates Alive)
 ```
-Round 1 (Shore): Red Team reaches checkpoint first → Red +1
-Round 2 (Tropics): Blue Team reaches checkpoint first → Blue +2
-Round 3 (Alpine): Red Team reaches checkpoint first → Red +3
-Round 4 (Caldera): Red Team reaches checkpoint first → Red +4
-Round 5 (Kiln): Red Team reaches checkpoint first → Red +5
+Round 1 (Shore, 1pt base, both alive):
+  Red Team: 1 + (1×0.5×2) + 1 = 3 points
+
+Round 2 (Tropics, 2pts base, both alive):
+  Blue Team: 2 + (2×0.5×2) + 2 = 6 points
+  (Red Total: 3, Blue Total: 6)
+
+Round 3 (Alpine, 3pts base, both Red alive):
+  Red Team: 3 + (3×0.5×2) + 3 = 9 points
+  (Red Total: 12, Blue Total: 6)
+
+Round 4 (Caldera, 4pts base, only 1 Red alive):
+  Red Team: 4 + (4×0.5×1) + 0 = 6 points
+  (Red Total: 18, Blue Total: 6)
+
+Round 5 (Kiln, 5pts base, both Red alive again):
+  Red Team: 5 + (5×0.5×2) + 5 = 15 points
 
 Final Scores:
-Red Team: 13 points - WINNERS!
-Blue Team: 2 points
-```
-
-### Scenario 2: Everyone Dies Mid-Match
-```
-Round 1 (Shore): Red Team wins → Red +1 (Total: Red 1, Blue 0)
-Round 2 (Tropics): Blue Team wins → Blue +2 (Total: Red 1, Blue 2)
-Round 3 (Alpine): Both teams die before checkpoint
-  → Blue team has higher score → Blue +3 (Total: Red 1, Blue 5)
-
-All teams dead, match ends:
-Blue Team: 5 points - WINNERS!
-Red Team: 1 point
-```
-
-### Scenario 3: Close Race
-```
-Round 1: Red +1 (Red: 1, Blue: 0)
-Round 2: Blue +2 (Red: 1, Blue: 2)
-Round 3: Red +3 (Red: 4, Blue: 2)
-Round 4: Blue +4 (Red: 4, Blue: 6)
-Round 5: Red +5 (Red: 9, Blue: 6)
-
-Red Team: 9 points - WINNERS!
+Red Team: 33 points - WINNERS!
 Blue Team: 6 points
+
+Note: Red's teammate death in Round 4 cost them 6 points (2 individual + 4 full team bonus)!
+```
+
+### Scenario 2: Comeback Victory Through Teamwork
+```
+Round 1 (Shore, 1pt, Red: both alive, Blue: 1 dead):
+  Red: 1 + 1 + 1 = 3
+  Blue: 1 + 0.5 + 0 = 1.5 ✗ (Lost round)
+  (Red: 3, Blue: 0)
+
+Round 2 (Tropics, 2pts, Blue: both alive, Red: 1 dead):
+  Blue: 2 + 2 + 2 = 6
+  Red: Lost
+  (Red: 3, Blue: 6)
+
+Round 3 (Alpine, 3pts, Blue: both alive):
+  Blue: 3 + 3 + 3 = 9
+  (Red: 3, Blue: 15)
+
+Round 4 (Caldera, 4pts, Red: both alive - comeback!):
+  Red: 4 + 4 + 4 = 12
+  (Red: 15, Blue: 15) - TIED!
+
+Round 5 (Kiln, 5pts, Red: both alive):
+  Red: 5 + 5 + 5 = 15
+
+Final Scores:
+Red Team: 30 points - WINNERS!
+Blue Team: 15 points
+
+Lesson: Blue lost because they let a teammate die in Rounds 1-2, while Red kept both alive in final rounds!
+```
+
+### Scenario 3: The Cost of Carelessness
+```
+Round 1 (Shore, 1pt):
+  Red: both alive = 1 + 1 + 1 = 3
+  Blue: Lost
+
+Round 2 (Tropics, 2pts):
+  Red: both alive = 2 + 2 + 2 = 6
+  (Red: 9, Blue: 0)
+
+Round 3 (Alpine, 3pts):
+  Red: ONE DIES during climb!
+  Red: only 1 reaches = 3 + 1.5 + 0 = 4.5
+  (Red: 13.5, Blue: 0)
+
+Round 4 (Caldera, 4pts):
+  Red: revived teammate, BOTH alive = 4 + 4 + 4 = 12
+  (Red: 25.5, Blue: 0)
+
+Round 5 (Kiln, 5pts):
+  Blue makes incredible comeback, both alive!
+  Blue: 5 + 5 + 5 = 15
+  (Red: 25.5, Blue: 15)
+
+Final Score:
+Red Team: 25.5 points - WINNERS
+Blue Team: 15 points
+
+Analysis: Red's teammate death in Round 3 cost them 4.5 points!
+(Lost: 1.5 individual + 3 full team = 4.5 points)
+This shows the importance of keeping teammates alive!
 ```
 
 ---

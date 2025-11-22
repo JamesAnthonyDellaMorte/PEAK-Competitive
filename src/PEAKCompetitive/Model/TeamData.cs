@@ -60,9 +60,23 @@ namespace PEAKCompetitive.Model
 
         public int GetAlivePlayersCount()
         {
-            // TODO: Implement check for alive players
+            // TODO: Implement check for alive (non-ghost) players
             // Will need to patch into PEAK's player state system
+            // For now, return total count (placeholder)
+            // Should check each player's ghost status:
+            // int aliveCount = 0;
+            // foreach (var player in Members) {
+            //     if (!IsGhost(player)) aliveCount++;
+            // }
+            // return aliveCount;
             return Members.Count;
+        }
+
+        public int GetGhostPlayersCount()
+        {
+            // TODO: Count ghosts in team
+            // return Members.Count - GetAlivePlayersCount();
+            return 0;
         }
     }
 }

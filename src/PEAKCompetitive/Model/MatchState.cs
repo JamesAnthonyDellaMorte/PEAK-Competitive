@@ -178,12 +178,27 @@ namespace PEAKCompetitive.Model
             return false;
         }
 
-        public void TeamReachedSummit(TeamData team)
+        public void TeamReachedSummit(TeamData team, int livingMembersCount)
         {
             team.HasReachedSummit = true;
 
-            int mapPoints = Configuration.ConfigurationHandler.GetMapPoints(CurrentMapName);
-            EndRound(team, mapPoints);
+            int baseMapPoints = Configuration.ConfigurationHandler.GetMapPoints(CurrentMapName);
+
+            // Calculate total points including individual and team bonuses
+            float totalPoints = Util.ScoringCalculator.CalculateRoundPoints(team, baseMapPoints, livingMembersCount);
+
+            Plugin.Logger.LogInfo($"{team.TeamName} reached checkpoint!");
+            Plugin.Logger.LogInfo($"Living members: {livingMembersCount}/{team.Members.Count}");
+            Plugin.Logger.LogInfo($"Scoring breakdown:");
+
+            // Log lost points if any members died
+            float lostPoints = Util.ScoringCalculator.GetLostPoints(baseMapPoints, livingMembersCount, team.Members.Count);
+            if (lostPoints > 0)
+            {
+                Plugin.Logger.LogWarning($"  Lost {lostPoints:F1} points due to {team.Members.Count - livingMembersCount} death(s)!");
+            }
+
+            EndRound(team, (int)totalPoints);
         }
 
         public bool AllTeamsDead()
