@@ -121,7 +121,7 @@ namespace PEAKCompetitive.Configuration
             GUILayout.EndHorizontal();
 
             // Player names
-            string playerNames = string.Join(", ", team.Members.Select(p => p.NickName));
+            string playerNames = string.Join(", ", team.Members.Select(p => p.UserId));
             GUILayout.Label($"  {playerNames}", GUI.skin.label);
 
             GUILayout.Space(5);

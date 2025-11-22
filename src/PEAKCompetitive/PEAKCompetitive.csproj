@@ -9,87 +9,33 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Update this path to your PEAK installation -->
-    <ManagedDir>C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed</ManagedDir>
+    <ManagedDir>C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed\</ManagedDir>
 
     <!-- Output path -->
     <OutputPath>..\..\artifacts\bin\$(Configuration)\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <RestoreAdditionalProjectSources>
+      https://nuget.bepinex.dev/v3/index.json
+    </RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- BepInEx -->
     <PackageReference Include="BepInEx.Core" Version="5.4.21" />
     <PackageReference Include="BepInEx.PluginInfoProps" Version="2.1.0" />
-
-    <!-- Harmony -->
-    <PackageReference Include="HarmonyX" Version="2.10.1" />
-
-    <!-- Publicizer for accessing internal game types -->
-    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.1">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Local game references - automatically include all game DLLs -->
   <ItemGroup>
-    <!-- Game assemblies - Update ManagedDir path above -->
-    <Reference Include="Assembly-CSharp" Publicize="true">
-      <HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <Reference Include="Assembly-CSharp-firstpass">
-      <HintPath>$(ManagedDir)\Assembly-CSharp-firstpass.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <!-- Unity Engine -->
-    <Reference Include="UnityEngine">
-      <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <Reference Include="UnityEngine.UI">
-      <HintPath>$(ManagedDir)\UnityEngine.UI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <Reference Include="UnityEngine.PhysicsModule">
-      <HintPath>$(ManagedDir)\UnityEngine.PhysicsModule.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <!-- Photon -->
-    <Reference Include="PhotonRealtime">
-      <HintPath>$(ManagedDir)\PhotonRealtime.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <Reference Include="PhotonUnityNetworking">
-      <HintPath>$(ManagedDir)\PhotonUnityNetworking.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-
-    <!-- TextMeshPro -->
-    <Reference Include="Unity.TextMeshPro">
-      <HintPath>$(ManagedDir)\Unity.TextMeshPro.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
+    <LocalReferences
+      Include="$(ManagedDir)*.dll"
+      Exclude="$(ManagedDir)Mono*.dll;$(ManagedDir)netstandard.dll;$(ManagedDir)System*.dll;$(ManagedDir)mscorlib.dll"/>
+    <Reference Include="@(LocalReferences)" Private="false" />
+    <Reference Include="$(ManagedDir)Assembly-CSharp.dll" Private="false" Publicize="true" />
   </ItemGroup>
 
 </Project>

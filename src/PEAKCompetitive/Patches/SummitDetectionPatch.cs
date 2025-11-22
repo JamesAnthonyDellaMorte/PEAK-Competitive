@@ -39,14 +39,14 @@ namespace PEAKCompetitive.Patches
 
             if (team == null)
             {
-                Plugin.Logger.LogWarning($"Player {player.NickName} not assigned to a team!");
+                Plugin.Logger.LogWarning($"Player {player.UserId} not assigned to a team!");
                 return;
             }
 
             // Check if this is the first team to reach summit
             if (!team.HasReachedSummit)
             {
-                Plugin.Logger.LogInfo($"{player.NickName} from {team.TeamName} reached the summit!");
+                Plugin.Logger.LogInfo($"{player.UserId} from {team.TeamName} reached the summit!");
 
                 // Mark team as having reached summit and award points
                 MatchState.Instance.TeamReachedSummit(team);

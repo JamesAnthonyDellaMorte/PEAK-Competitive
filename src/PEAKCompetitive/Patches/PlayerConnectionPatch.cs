@@ -11,12 +11,12 @@ namespace PEAKCompetitive.Patches
     [HarmonyPatch(typeof(PlayerConnectionLog), "OnPlayerEnteredRoom")]
     public class OnPlayerEnteredRoomPatch
     {
-        static void Postfix(Player newPlayer)
+        static void Postfix(Photon.Realtime.Player newPlayer)
         {
             if (!PhotonNetwork.IsMasterClient) return;
             if (!Configuration.ConfigurationHandler.EnableCompetitiveMode) return;
 
-            Plugin.Logger.LogInfo($"Player joined: {newPlayer.NickName}");
+            Plugin.Logger.LogInfo($"Player joined: {newPlayer.UserId}");
 
             // Assign to team if match is not active
             var matchState = Model.MatchState.Instance;
@@ -29,12 +29,12 @@ namespace PEAKCompetitive.Patches
                 if (smallestTeam != null)
                 {
                     matchState.AssignPlayerToTeam(newPlayer, smallestTeam.TeamId);
-                    Plugin.Logger.LogInfo($"Auto-assigned {newPlayer.NickName} to {smallestTeam.TeamName}");
+                    Plugin.Logger.LogInfo($"Auto-assigned {newPlayer.UserId} to {smallestTeam.TeamName}");
                 }
             }
             else
             {
-                Plugin.Logger.LogWarning($"Match in progress - {newPlayer.NickName} not assigned to team");
+                Plugin.Logger.LogWarning($"Match in progress - {newPlayer.UserId} not assigned to team");
             }
         }
 
@@ -61,11 +61,11 @@ namespace PEAKCompetitive.Patches
     [HarmonyPatch(typeof(PlayerConnectionLog), "OnPlayerLeftRoom")]
     public class OnPlayerLeftRoomPatch
     {
-        static void Postfix(Player otherPlayer)
+        static void Postfix(Photon.Realtime.Player otherPlayer)
         {
             if (!PhotonNetwork.IsMasterClient) return;
 
-            Plugin.Logger.LogInfo($"Player left: {otherPlayer.NickName}");
+            Plugin.Logger.LogInfo($"Player left: {otherPlayer.UserId}");
 
             // Remove from team
             TeamManager.RemovePlayer(otherPlayer);

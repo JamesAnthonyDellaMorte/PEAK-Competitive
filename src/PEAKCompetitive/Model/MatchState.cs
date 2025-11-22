@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Photon.Realtime;
+using PhotonPlayer = Photon.Realtime.Player;
 
 namespace PEAKCompetitive.Model
 {
@@ -61,18 +62,18 @@ namespace PEAKCompetitive.Model
             return $"Team {teamIndex + 1}";
         }
 
-        public void AssignPlayerToTeam(Player player, int teamId)
+        public void AssignPlayerToTeam(Photon.Realtime.Player player, int teamId)
         {
             var team = Teams.FirstOrDefault(t => t.TeamId == teamId);
 
             if (team != null)
             {
                 team.AddMember(player);
-                Plugin.Logger.LogInfo($"Assigned {player.NickName} to {team.TeamName}");
+                Plugin.Logger.LogInfo($"Assigned {player.UserId} to {team.TeamName}");
             }
         }
 
-        public TeamData GetPlayerTeam(Player player)
+        public TeamData GetPlayerTeam(Photon.Realtime.Player player)
         {
             return Teams.FirstOrDefault(t => t.IsPlayerOnTeam(player));
         }

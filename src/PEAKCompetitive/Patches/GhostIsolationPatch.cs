@@ -32,7 +32,7 @@ namespace PEAKCompetitive.Patches
             // Apply team-based visibility filter
             ApplyTeamGhostFilter(player, team.TeamId);
 
-            Plugin.Logger.LogInfo($"{player.NickName} is now a ghost for {team.TeamName}");
+            Plugin.Logger.LogInfo($"{player.UserId} is now a ghost for {team.TeamName}");
         }
 
         private static void ApplyTeamGhostFilter(Player ghostPlayer, int teamId)
@@ -49,7 +49,7 @@ namespace PEAKCompetitive.Patches
                 }
             }
 
-            Plugin.Logger.LogInfo($"Applied ghost filter for team {teamId} to {ghostPlayer.NickName}");
+            Plugin.Logger.LogInfo($"Applied ghost filter for team {teamId} to {ghostPlayer.UserId}");
         }
 
         private static void HidePlayerFromGhost(Player ghost, Player playerToHide)

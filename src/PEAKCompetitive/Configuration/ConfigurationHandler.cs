@@ -8,7 +8,7 @@ namespace PEAKCompetitive.Configuration
         private static ConfigFile _config;
 
         // General Settings
-        public static bool EnableCompetitiveMode { get; private set; }
+        public static bool EnableCompetitiveMode { get; set; }
         public static KeyCode MenuKey { get; private set; }
 
         // Team Settings
@@ -16,8 +16,8 @@ namespace PEAKCompetitive.Configuration
         public static int PlayersPerTeam { get; private set; }
 
         // Match Settings
-        public static bool ItemsPersist { get; private set; }
-        public static bool ShowScoreboard { get; private set; }
+        public static bool ItemsPersist { get; set; }
+        public static bool ShowScoreboard { get; set; }
         public static float IndividualCompletionMultiplier { get; private set; }
         public static bool EnableFullTeamBonus { get; private set; }
 

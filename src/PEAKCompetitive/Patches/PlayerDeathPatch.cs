@@ -18,7 +18,7 @@ namespace PEAKCompetitive.Patches
             if (!Configuration.ConfigurationHandler.EnableCompetitiveMode) return;
             if (!MatchState.Instance.IsRoundActive) return;
 
-            Plugin.Logger.LogInfo($"Player {player.NickName} died");
+            Plugin.Logger.LogInfo($"Player {player.UserId} died");
 
             // Check if all teams are dead
             if (MatchState.Instance.AllTeamsDead())

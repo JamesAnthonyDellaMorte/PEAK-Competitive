@@ -44,14 +44,14 @@ namespace PEAKCompetitive.Util
             LogTeamAssignments();
         }
 
-        public static void AssignPlayerToTeamById(Player player, int teamId)
+        public static void AssignPlayerToTeamById(Photon.Realtime.Player player, int teamId)
         {
             if (!PhotonNetwork.IsMasterClient) return;
 
             var matchState = MatchState.Instance;
             matchState.AssignPlayerToTeam(player, teamId);
 
-            Plugin.Logger.LogInfo($"Manually assigned {player.NickName} to team {teamId}");
+            Plugin.Logger.LogInfo($"Manually assigned {player.UserId} to team {teamId}");
         }
 
         public static void BalanceTeams()
@@ -78,12 +78,12 @@ namespace PEAKCompetitive.Util
             LogTeamAssignments();
         }
 
-        public static TeamData GetPlayerTeam(Player player)
+        public static TeamData GetPlayerTeam(Photon.Realtime.Player player)
         {
             return MatchState.Instance.GetPlayerTeam(player);
         }
 
-        public static bool ArePlayersOnSameTeam(Player player1, Player player2)
+        public static bool ArePlayersOnSameTeam(Photon.Realtime.Player player1, Photon.Realtime.Player player2)
         {
             var team1 = GetPlayerTeam(player1);
             var team2 = GetPlayerTeam(player2);
@@ -91,16 +91,16 @@ namespace PEAKCompetitive.Util
             return team1 != null && team2 != null && team1.TeamId == team2.TeamId;
         }
 
-        public static List<Player> GetTeammates(Player player)
+        public static List<Photon.Realtime.Player> GetTeammates(Photon.Realtime.Player player)
         {
             var team = GetPlayerTeam(player);
 
-            if (team == null) return new List<Player>();
+            if (team == null) return new List<Photon.Realtime.Player>();
 
             return team.Members.Where(p => p != player).ToList();
         }
 
-        public static void RemovePlayer(Player player)
+        public static void RemovePlayer(Photon.Realtime.Player player)
         {
             var matchState = MatchState.Instance;
 
@@ -109,7 +109,7 @@ namespace PEAKCompetitive.Util
                 team.RemoveMember(player);
             }
 
-            Plugin.Logger.LogInfo($"Removed {player.NickName} from teams");
+            Plugin.Logger.LogInfo($"Removed {player.UserId} from teams");
         }
 
         public static void ClearAllTeams()
@@ -132,7 +132,7 @@ namespace PEAKCompetitive.Util
 
             foreach (var team in matchState.Teams)
             {
-                string memberNames = string.Join(", ", team.Members.Select(p => p.NickName));
+                string memberNames = string.Join(", ", team.Members.Select(p => p.UserId));
                 Plugin.Logger.LogInfo($"{team.TeamName}: {memberNames} ({team.Members.Count} players)");
             }
 

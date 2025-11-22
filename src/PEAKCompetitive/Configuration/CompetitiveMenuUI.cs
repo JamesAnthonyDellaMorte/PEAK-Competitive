@@ -66,11 +66,11 @@ namespace PEAKCompetitive.Configuration
             GUILayout.Label("=== Map Point Values ===", GUI.skin.box);
             GUILayout.Space(5);
 
-            DrawPointSlider("Map 1 Points", ref ConfigurationHandler.Map1Points);
-            DrawPointSlider("Map 2 Points", ref ConfigurationHandler.Map2Points);
-            DrawPointSlider("Map 3 Points", ref ConfigurationHandler.Map3Points);
-            DrawPointSlider("Map 4 Points", ref ConfigurationHandler.Map4Points);
-            DrawPointSlider("Ruth's Map Points", ref ConfigurationHandler.RuthsMapPoints);
+            ConfigurationHandler.Map1Points = DrawPointSlider("Map 1 Points", ConfigurationHandler.Map1Points);
+            ConfigurationHandler.Map2Points = DrawPointSlider("Map 2 Points", ConfigurationHandler.Map2Points);
+            ConfigurationHandler.Map3Points = DrawPointSlider("Map 3 Points", ConfigurationHandler.Map3Points);
+            ConfigurationHandler.Map4Points = DrawPointSlider("Map 4 Points", ConfigurationHandler.Map4Points);
+            ConfigurationHandler.RuthsMapPoints = DrawPointSlider("Ruth's Map Points", ConfigurationHandler.RuthsMapPoints);
 
             GUILayout.Space(10);
 
@@ -137,7 +137,7 @@ namespace PEAKCompetitive.Configuration
                 GUILayout.Space(5);
                 foreach (var team in matchState.Teams)
                 {
-                    string members = string.Join(", ", team.Members.ConvertAll(p => p.NickName));
+                    string members = string.Join(", ", team.Members.ConvertAll(p => p.UserId));
                     GUILayout.Label($"{team.TeamName}: {team.Score} pts - {members}");
                 }
             }
@@ -156,12 +156,13 @@ namespace PEAKCompetitive.Configuration
             GUI.DragWindow();
         }
 
-        private void DrawPointSlider(string label, ref int value)
+        private int DrawPointSlider(string label, int value)
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label($"{label}: {value}", GUILayout.Width(200));
-            value = (int)GUILayout.HorizontalSlider(value, 1, 10);
+            int newValue = (int)GUILayout.HorizontalSlider(value, 1, 10);
             GUILayout.EndHorizontal();
+            return newValue;
         }
 
         private void StartMatch()
