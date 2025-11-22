@@ -6,9 +6,17 @@ using PEAKCompetitive.Util;
 
 namespace PEAKCompetitive.Patches
 {
-    // TODO: This patch needs to be updated with actual PEAK summit detection class/method
-    // Placeholder for summit reached detection
-    // You'll need to find the actual method in PEAK that triggers when a player reaches the summit
+    // TODO: This patch needs to be updated with actual PEAK checkpoint/campfire detection
+    //
+    // PEAK has campfire checkpoints at the end of each biome with Ancient Statues for revival
+    // We need to detect when a team reaches the checkpoint = wins the round
+    //
+    // Likely hookpoints:
+    // 1. Campfire.Awake() or Campfire trigger zone
+    // 2. Ancient Statue activation
+    // 3. Biome transition / scene change
+    //
+    // From PEAK Unlimited we know Campfire class exists
 
     /*
     [HarmonyPatch(typeof(SummitTrigger), "OnTriggerEnter")]  // Example - replace with actual class

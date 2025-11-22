@@ -210,13 +210,29 @@ namespace PEAKCompetitive.Configuration
 
         public static int GetMapPoints(string mapName)
         {
-            // Map the actual map names to point values
-            // This will need to be adjusted based on actual map names in PEAK
-            if (mapName.Contains("1") || mapName.Contains("One")) return Map1Points;
-            if (mapName.Contains("2") || mapName.Contains("Two")) return Map2Points;
-            if (mapName.Contains("3") || mapName.Contains("Three")) return Map3Points;
-            if (mapName.Contains("4") || mapName.Contains("Four")) return Map4Points;
-            if (mapName.Contains("Ruth")) return RuthsMapPoints;
+            // PEAK biome names: Shore, Tropics, Roots, Alpine, Mesa, Caldera, Kiln, Summit
+            // Map1 = Shore (easy tutorial)
+            // Map2 = Tropics/Roots (medium jungle/forest)
+            // Map3 = Alpine/Mesa (hard snow/desert)
+            // Map4 = Caldera (very hard volcano slopes)
+            // RuthsMap = Kiln (extreme inner volcano)
+
+            string mapLower = mapName.ToLower();
+
+            if (mapLower.Contains("shore") || mapLower.Contains("coast") || mapLower.Contains("beach"))
+                return Map1Points;
+
+            if (mapLower.Contains("tropics") || mapLower.Contains("jungle") || mapLower.Contains("roots") || mapLower.Contains("redwood"))
+                return Map2Points;
+
+            if (mapLower.Contains("alpine") || mapLower.Contains("snow") || mapLower.Contains("mesa") || mapLower.Contains("desert"))
+                return Map3Points;
+
+            if (mapLower.Contains("caldera") || mapLower.Contains("volcano"))
+                return Map4Points;
+
+            if (mapLower.Contains("kiln") || mapLower.Contains("summit") || mapLower.Contains("peak"))
+                return RuthsMapPoints;
 
             // Default to 1 point if map not recognized
             return 1;
