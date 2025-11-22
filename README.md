@@ -4,11 +4,14 @@ A BepInEx mod for PEAK that adds competitive gameplay features.
 
 ## Features
 
-- **Timer System**: Track your climb times with precision
-- **Leaderboards**: Compare times with other players
-- **Race Modes**: Compete against others in real-time
-- **Match Statistics**: Detailed stats for each climb
-- **Configurable Settings**: Customize competitive features to your preference
+- **Duo Team Racing**: 2v2 (or configurable) teams race to checkpoints
+- **Round-Based Gameplay**: First team to checkpoint wins the round
+- **Point Scoring System**: Different biomes worth different points (Shore=1pt, Kiln=5pts)
+- **Team-Isolated Ghosts**: Losing teams become ghosts but only see/help their own team
+- **Items Persist**: All players keep gear between rounds (fair competition)
+- **Match Victory**: First to Kiln with most points wins, or last team standing
+- **Live Scoreboard**: Track team scores and round progress
+- **Configurable Settings**: Customize team sizes, point values, and match rules
 
 ## Installation
 
@@ -37,29 +40,42 @@ Configuration file location: `BepInEx/config/PEAKCompetitive.cfg`
 
 ### Settings
 
-- **Enable Timer**: Show timer during climbs
-- **Enable Leaderboards**: Track and display leaderboards
-- **Race Mode**: Enable competitive race features
-- **Show Stats**: Display match statistics
+- **Enable Competitive Mode**: Toggle team race features
+- **Max Teams**: Number of teams (2-10, default: 2)
+- **Players Per Team**: Team size (1-4, default: 2)
+- **Items Persist**: Items carry between rounds (default: true)
+- **Show Scoreboard**: Display live scoreboard (default: true)
+- **Map Points**: Configure points per biome (Shore, Tropics/Roots, Alpine/Mesa, Caldera, Kiln)
 - **Config Menu Key**: Key to open settings (default: F3)
 
-## Usage
+## How It Works
 
-### Timer System
-- Timer starts automatically when you begin climbing
-- Displays current time in corner of screen
-- Saves personal best times
+### Match Flow
+1. **Host starts match** via F3 menu
+2. **Teams assigned** - Players split into teams (auto or manual)
+3. **Round begins** - Teams race to checkpoint campfire
+4. **First team wins** - First to checkpoint gets points based on biome difficulty
+5. **Losers become ghosts** - Can only see/help their own team
+6. **Round resets** - All players revive at next biome checkpoint
+7. **Repeat** until Kiln reached or all teams eliminated
+8. **Match ends** - Team with most points wins!
 
-### Race Mode
-- Host enables race mode in settings
-- All players see synchronized timer
-- First to summit wins
-- Results displayed at end screen
+### Team Ghost System
+When your team loses a round:
+- You become a ghost (PEAK's existing ghost mode)
+- You can ONLY see and interact with your own team
+- Help your teammates navigate, scout, and strategize
+- Revive at the next checkpoint for the next round
+- Other teams cannot see or hear you
 
-### Leaderboards
-- Automatic tracking of best times
-- Per-mountain leaderboards
-- View with `/leaderboard` command or in-game menu
+### Scoring
+- **Shore** (Beach): 1 point
+- **Tropics/Roots** (Jungle/Forest): 2 points
+- **Alpine/Mesa** (Snow/Desert): 3 points
+- **Caldera** (Volcano): 4 points
+- **Kiln** (Inner Volcano): 5 points
+
+Points are configurable per map!
 
 ## Compatibility
 
