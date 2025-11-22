@@ -9,7 +9,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Update this path to your PEAK installation -->
-    <ManagedDir>C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed\</ManagedDir>
+    <!-- Windows: C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed\ -->
+    <!-- Mac (using copied DLLs): ../../lib/PEAK/ -->
+    <ManagedDir Condition="Exists('../../lib/PEAK/Assembly-CSharp.dll')">../../lib/PEAK/</ManagedDir>
+    <ManagedDir Condition="!Exists('../../lib/PEAK/Assembly-CSharp.dll')">C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed\</ManagedDir>
 
     <!-- Output path -->
     <OutputPath>..\..\artifacts\bin\$(Configuration)\</OutputPath>
@@ -30,12 +33,21 @@
   </ItemGroup>
 
   <!-- Local game references - automatically include all game DLLs -->
-  <ItemGroup>
+  <ItemGroup Condition="Exists('$(ManagedDir)')">
     <LocalReferences
       Include="$(ManagedDir)*.dll"
       Exclude="$(ManagedDir)Mono*.dll;$(ManagedDir)netstandard.dll;$(ManagedDir)System*.dll;$(ManagedDir)mscorlib.dll"/>
     <Reference Include="@(LocalReferences)" Private="false" />
     <Reference Include="$(ManagedDir)Assembly-CSharp.dll" Private="false" Publicize="true" />
+  </ItemGroup>
+
+  <!-- Stub references when building without game files (Mac cross-compile) -->
+  <ItemGroup Condition="!Exists('$(ManagedDir)')">
+    <!-- Unity Engine stubs from NuGet -->
+    <PackageReference Include="UnityEngine.Modules" Version="2022.3.5" />
+
+    <!-- We'll need to comment out game-specific code for stub builds -->
+    <DefineConstants>$(DefineConstants);STUB_BUILD</DefineConstants>
   </ItemGroup>
 
 </Project>

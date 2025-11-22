@@ -3,6 +3,9 @@ bin/
 obj/
 artifacts/
 
+# Game DLLs (not distributed - get from your own game install)
+lib/PEAK/*.dll
+
 # Visual Studio
 .vs/
 *.user
