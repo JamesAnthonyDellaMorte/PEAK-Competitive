@@ -1,0 +1,28 @@
+[package]
+namespace = "YourName"
+name = "PEAKCompetitive"
+versionFile = "manifest.json"
+
+[package.dependencies]
+BepInEx-BepInExPack_PEAK = "5.4.2403"
+
+[build]
+icon = "icon.png"
+readme = "README.md"
+outdir = "artifacts/thunderstore"
+
+[[build.copy]]
+source = "manifest.json"
+target = "manifest.json"
+
+[[build.copy]]
+source = "CHANGELOG.md"
+target = "CHANGELOG.md"
+
+[[build.copy]]
+source = "artifacts/bin/Release/PEAKCompetitive.dll"
+target = "plugins/PEAKCompetitive.dll"
+
+[publish]
+communities = ["peak"]
+categories = ["mods", "quality of life", "host only"]
