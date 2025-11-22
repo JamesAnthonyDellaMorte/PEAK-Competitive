@@ -1,6 +1,7 @@
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
+using UnityEngine;
 
 namespace PEAKCompetitive
 {
@@ -18,12 +19,18 @@ namespace PEAKCompetitive
             // Initialize configuration
             Configuration.ConfigurationHandler.Initialize(Config);
 
+            // Add UI components
+            gameObject.AddComponent<Configuration.ScoreboardUI>();
+            gameObject.AddComponent<Configuration.CompetitiveMenuUI>();
+            gameObject.AddComponent<Configuration.MatchNotificationUI>();
+
             // Apply all Harmony patches
             _harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
             _harmony.PatchAll();
 
             Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded!");
             Logger.LogInfo("Competitive features enabled!");
+            Logger.LogInfo("Press F3 to open competitive menu");
         }
 
         private void OnDestroy()

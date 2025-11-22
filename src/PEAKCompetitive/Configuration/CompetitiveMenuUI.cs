@@ -1,0 +1,204 @@
+using UnityEngine;
+using Photon.Pun;
+
+namespace PEAKCompetitive.Configuration
+{
+    public class CompetitiveMenuUI : MonoBehaviour
+    {
+        private bool _showMenu = false;
+        private Rect _windowRect = new Rect(Screen.width / 2 - 300, Screen.height / 2 - 250, 600, 500);
+        private Vector2 _scrollPosition = Vector2.zero;
+
+        private void Update()
+        {
+            if (Input.GetKeyDown(ConfigurationHandler.MenuKey))
+            {
+                _showMenu = !_showMenu;
+            }
+        }
+
+        private void OnGUI()
+        {
+            if (!_showMenu) return;
+
+            _windowRect = GUI.Window(0, _windowRect, DrawMenuWindow, "PEAK Competitive Settings");
+        }
+
+        private void DrawMenuWindow(int windowID)
+        {
+            _scrollPosition = GUILayout.BeginScrollView(_scrollPosition);
+
+            GUILayout.Space(10);
+
+            // Only host can change settings
+            bool isHost = PhotonNetwork.IsMasterClient;
+
+            if (!isHost)
+            {
+                GUILayout.Label("Only the host can change competitive settings");
+                GUILayout.Space(10);
+            }
+
+            GUI.enabled = isHost;
+
+            // Match Settings Section
+            GUILayout.Label("=== Match Settings ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            ConfigurationHandler.EnableCompetitiveMode = GUILayout.Toggle(
+                ConfigurationHandler.EnableCompetitiveMode,
+                "Enable Competitive Mode"
+            );
+
+            ConfigurationHandler.ShowScoreboard = GUILayout.Toggle(
+                ConfigurationHandler.ShowScoreboard,
+                "Show Scoreboard"
+            );
+
+            ConfigurationHandler.ItemsPersist = GUILayout.Toggle(
+                ConfigurationHandler.ItemsPersist,
+                "Items Persist Between Rounds"
+            );
+
+            GUILayout.Space(10);
+
+            // Map Points Section
+            GUILayout.Label("=== Map Point Values ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            DrawPointSlider("Map 1 Points", ref ConfigurationHandler.Map1Points);
+            DrawPointSlider("Map 2 Points", ref ConfigurationHandler.Map2Points);
+            DrawPointSlider("Map 3 Points", ref ConfigurationHandler.Map3Points);
+            DrawPointSlider("Map 4 Points", ref ConfigurationHandler.Map4Points);
+            DrawPointSlider("Ruth's Map Points", ref ConfigurationHandler.RuthsMapPoints);
+
+            GUILayout.Space(10);
+
+            // UI Settings Section
+            GUILayout.Label("=== Scoreboard Position ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            GUILayout.Label($"X Position: {ConfigurationHandler.ScoreboardX:F0}");
+            ConfigurationHandler.ScoreboardX = GUILayout.HorizontalSlider(
+                ConfigurationHandler.ScoreboardX,
+                0f,
+                Screen.width
+            );
+
+            GUILayout.Label($"Y Position: {ConfigurationHandler.ScoreboardY:F0}");
+            ConfigurationHandler.ScoreboardY = GUILayout.HorizontalSlider(
+                ConfigurationHandler.ScoreboardY,
+                0f,
+                Screen.height
+            );
+
+            GUILayout.Label($"Scale: {ConfigurationHandler.ScoreboardScale:F2}");
+            ConfigurationHandler.ScoreboardScale = GUILayout.HorizontalSlider(
+                ConfigurationHandler.ScoreboardScale,
+                0.5f,
+                3.0f
+            );
+
+            GUILayout.Space(10);
+
+            // Match Control Section
+            GUILayout.Label("=== Match Control ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            if (GUILayout.Button("Start New Match"))
+            {
+                StartMatch();
+            }
+
+            if (GUILayout.Button("End Match"))
+            {
+                EndMatch();
+            }
+
+            if (GUILayout.Button("Reassign Teams"))
+            {
+                ReassignTeams();
+            }
+
+            GUILayout.Space(10);
+
+            // Info Section
+            GUILayout.Label("=== Current Match Info ===", GUI.skin.box);
+            GUILayout.Space(5);
+
+            var matchState = Model.MatchState.Instance;
+
+            GUILayout.Label($"Match Active: {matchState.IsMatchActive}");
+            GUILayout.Label($"Round: {matchState.CurrentRound}");
+            GUILayout.Label($"Map: {matchState.CurrentMapName}");
+
+            if (matchState.Teams.Count > 0)
+            {
+                GUILayout.Space(5);
+                foreach (var team in matchState.Teams)
+                {
+                    string members = string.Join(", ", team.Members.ConvertAll(p => p.NickName));
+                    GUILayout.Label($"{team.TeamName}: {team.Score} pts - {members}");
+                }
+            }
+
+            GUI.enabled = true;
+
+            GUILayout.Space(10);
+
+            if (GUILayout.Button("Close"))
+            {
+                _showMenu = false;
+            }
+
+            GUILayout.EndScrollView();
+
+            GUI.DragWindow();
+        }
+
+        private void DrawPointSlider(string label, ref int value)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"{label}: {value}", GUILayout.Width(200));
+            value = (int)GUILayout.HorizontalSlider(value, 1, 10);
+            GUILayout.EndHorizontal();
+        }
+
+        private void StartMatch()
+        {
+            if (!PhotonNetwork.IsMasterClient) return;
+
+            Plugin.Logger.LogInfo("Starting competitive match...");
+
+            // Assign teams
+            Util.TeamManager.AssignPlayersToTeams();
+
+            // Start match
+            Model.MatchState.Instance.StartMatch();
+
+            Plugin.Logger.LogInfo("Match started!");
+        }
+
+        private void EndMatch()
+        {
+            if (!PhotonNetwork.IsMasterClient) return;
+
+            Plugin.Logger.LogInfo("Ending match...");
+            Model.MatchState.Instance.EndMatch();
+
+            var winner = Model.MatchState.Instance.WinningTeam;
+            if (winner != null)
+            {
+                Plugin.Logger.LogInfo($"{winner.TeamName} wins with {winner.Score} points!");
+            }
+        }
+
+        private void ReassignTeams()
+        {
+            if (!PhotonNetwork.IsMasterClient) return;
+
+            Plugin.Logger.LogInfo("Reassigning teams...");
+            Util.TeamManager.BalanceTeams();
+        }
+    }
+}
