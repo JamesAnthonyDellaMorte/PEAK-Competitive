@@ -1,0 +1,39 @@
+ICON REQUIREMENTS FOR THUNDERSTORE
+===================================
+
+You need to create: icon.png
+
+Specifications:
+- Size: EXACTLY 256x256 pixels
+- Format: PNG with transparency
+- Location: Save to this folder (thunderstore/icon.png)
+
+Design Ideas:
+1. Mountain peak with checkered racing flag
+2. Two colored teams (red vs blue) racing upward
+3. Trophy with difficulty stars (★★★★★)
+4. Minimalist geometric mountain
+5. "PEAK" text with competitive theme
+
+Quick Creation Options:
+
+AI Generation:
+  - ChatGPT/DALL-E: "Create a 256x256 gaming logo for a competitive mountain racing mod"
+  - Midjourney: "/imagine 256x256 icon, mountain peak, checkered flag, gaming logo --ar 1:1"
+
+Free Design Tools:
+  - Canva: canva.com (use free templates)
+  - GIMP: gimp.org (free Photoshop alternative)
+  - Photopea: photopea.com (browser-based)
+
+Stock Icons:
+  - Flaticon: flaticon.com (search "mountain racing")
+  - Icons8: icons8.com (free with attribution)
+
+Once created, save as:
+  thunderstore/icon.png
+
+Then run:
+  .\package-thunderstore.ps1
+
+The script will automatically include it in the package!

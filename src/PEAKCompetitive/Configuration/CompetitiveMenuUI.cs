@@ -62,15 +62,17 @@ namespace PEAKCompetitive.Configuration
 
             GUILayout.Space(10);
 
-            // Map Points Section
-            GUILayout.Label("=== Map Point Values ===", GUI.skin.box);
+            // Biome Points Section - Difficulty-based scoring
+            GUILayout.Label("=== Biome Point Values (Difficulty-Based) ===", GUI.skin.box);
             GUILayout.Space(5);
 
-            ConfigurationHandler.Map1Points = DrawPointSlider("Map 1 Points", ConfigurationHandler.Map1Points);
-            ConfigurationHandler.Map2Points = DrawPointSlider("Map 2 Points", ConfigurationHandler.Map2Points);
-            ConfigurationHandler.Map3Points = DrawPointSlider("Map 3 Points", ConfigurationHandler.Map3Points);
-            ConfigurationHandler.Map4Points = DrawPointSlider("Map 4 Points", ConfigurationHandler.Map4Points);
-            ConfigurationHandler.RuthsMapPoints = DrawPointSlider("Ruth's Map Points", ConfigurationHandler.RuthsMapPoints);
+            ConfigurationHandler.ShorePoints = DrawPointSlider("Shore (★☆☆☆☆)", ConfigurationHandler.ShorePoints);
+            ConfigurationHandler.TropicsPoints = DrawPointSlider("Tropics (★★☆☆☆)", ConfigurationHandler.TropicsPoints);
+            ConfigurationHandler.MesaPoints = DrawPointSlider("Mesa (★★★☆☆)", ConfigurationHandler.MesaPoints);
+            ConfigurationHandler.AlpinePoints = DrawPointSlider("Alpine (★★★★☆)", ConfigurationHandler.AlpinePoints);
+            ConfigurationHandler.RootsPoints = DrawPointSlider("Roots (★★★★☆)", ConfigurationHandler.RootsPoints);
+            ConfigurationHandler.CalderaPoints = DrawPointSlider("Caldera (★★★★★)", ConfigurationHandler.CalderaPoints);
+            ConfigurationHandler.KilnPoints = DrawPointSlider("Kiln/Summit (★★★★★+)", ConfigurationHandler.KilnPoints);
 
             GUILayout.Space(10);
 
@@ -137,7 +139,7 @@ namespace PEAKCompetitive.Configuration
                 GUILayout.Space(5);
                 foreach (var team in matchState.Teams)
                 {
-                    string members = string.Join(", ", team.Members.ConvertAll(p => p.UserId));
+                    string members = string.Join(", ", team.Members.ConvertAll(p => Util.TeamManager.GetPlayerDisplayName(p)));
                     GUILayout.Label($"{team.TeamName}: {team.Score} pts - {members}");
                 }
             }
@@ -177,7 +179,11 @@ namespace PEAKCompetitive.Configuration
             // Start match
             Model.MatchState.Instance.StartMatch();
 
-            Plugin.Logger.LogInfo("Match started!");
+            // Sync to all clients
+            Util.NetworkSyncManager.Instance.SyncTeamAssignments();
+            Util.NetworkSyncManager.Instance.SyncMatchStart();
+
+            Plugin.Logger.LogInfo("Match started and synced!");
         }
 
         private void EndMatch()
@@ -200,6 +206,9 @@ namespace PEAKCompetitive.Configuration
 
             Plugin.Logger.LogInfo("Reassigning teams...");
             Util.TeamManager.BalanceTeams();
+
+            // Sync team assignments to all clients
+            Util.NetworkSyncManager.Instance.SyncTeamAssignments();
         }
     }
 }

@@ -21,12 +21,14 @@ namespace PEAKCompetitive.Configuration
         public static float IndividualCompletionMultiplier { get; private set; }
         public static bool EnableFullTeamBonus { get; private set; }
 
-        // Map Point Values (host configurable)
-        public static int Map1Points { get; set; }
-        public static int Map2Points { get; set; }
-        public static int Map3Points { get; set; }
-        public static int Map4Points { get; set; }
-        public static int RuthsMapPoints { get; set; }
+        // Biome Point Values (host configurable) - Based on difficulty
+        public static int ShorePoints { get; set; }      // ★☆☆☆☆ Easy
+        public static int TropicsPoints { get; set; }    // ★★☆☆☆ Moderate
+        public static int MesaPoints { get; set; }       // ★★★☆☆ Moderate+
+        public static int AlpinePoints { get; set; }     // ★★★★☆ Hard
+        public static int RootsPoints { get; set; }      // ★★★★☆ Hard
+        public static int CalderaPoints { get; set; }    // ★★★★★ Very Hard
+        public static int KilnPoints { get; set; }       // ★★★★★+ Extreme
 
         // UI Settings
         public static float ScoreboardX { get; set; }
@@ -116,61 +118,83 @@ namespace PEAKCompetitive.Configuration
             );
             EnableFullTeamBonus = enableFullTeamBonusEntry.Value;
 
-            // Map Point Values
-            var map1PointsEntry = config.Bind(
-                "MapPoints",
-                "Map1Points",
+            // Biome Point Values - Difficulty-based scoring
+            var shorePointsEntry = config.Bind(
+                "BiomePoints",
+                "ShorePoints",
                 1,
                 new ConfigDescription(
-                    "Points awarded for winning Map 1",
-                    new AcceptableValueRange<int>(1, 10)
+                    "Points for Shore biome (★☆☆☆☆ Easy)",
+                    new AcceptableValueRange<int>(1, 20)
                 )
             );
-            Map1Points = map1PointsEntry.Value;
+            ShorePoints = shorePointsEntry.Value;
 
-            var map2PointsEntry = config.Bind(
-                "MapPoints",
-                "Map2Points",
-                1,
-                new ConfigDescription(
-                    "Points awarded for winning Map 2",
-                    new AcceptableValueRange<int>(1, 10)
-                )
-            );
-            Map2Points = map2PointsEntry.Value;
-
-            var map3PointsEntry = config.Bind(
-                "MapPoints",
-                "Map3Points",
+            var tropicsPointsEntry = config.Bind(
+                "BiomePoints",
+                "TropicsPoints",
                 2,
                 new ConfigDescription(
-                    "Points awarded for winning Map 3",
-                    new AcceptableValueRange<int>(1, 10)
+                    "Points for Tropics biome (★★☆☆☆ Moderate)",
+                    new AcceptableValueRange<int>(1, 20)
                 )
             );
-            Map3Points = map3PointsEntry.Value;
+            TropicsPoints = tropicsPointsEntry.Value;
 
-            var map4PointsEntry = config.Bind(
-                "MapPoints",
-                "Map4Points",
-                2,
-                new ConfigDescription(
-                    "Points awarded for winning Map 4",
-                    new AcceptableValueRange<int>(1, 10)
-                )
-            );
-            Map4Points = map4PointsEntry.Value;
-
-            var ruthsMapPointsEntry = config.Bind(
-                "MapPoints",
-                "RuthsMapPoints",
+            var mesaPointsEntry = config.Bind(
+                "BiomePoints",
+                "MesaPoints",
                 3,
                 new ConfigDescription(
-                    "Points awarded for winning Ruth's Map",
-                    new AcceptableValueRange<int>(1, 10)
+                    "Points for Mesa biome (★★★☆☆ Moderate+)",
+                    new AcceptableValueRange<int>(1, 20)
                 )
             );
-            RuthsMapPoints = ruthsMapPointsEntry.Value;
+            MesaPoints = mesaPointsEntry.Value;
+
+            var alpinePointsEntry = config.Bind(
+                "BiomePoints",
+                "AlpinePoints",
+                4,
+                new ConfigDescription(
+                    "Points for Alpine biome (★★★★☆ Hard)",
+                    new AcceptableValueRange<int>(1, 20)
+                )
+            );
+            AlpinePoints = alpinePointsEntry.Value;
+
+            var rootsPointsEntry = config.Bind(
+                "BiomePoints",
+                "RootsPoints",
+                4,
+                new ConfigDescription(
+                    "Points for Roots biome (★★★★☆ Hard)",
+                    new AcceptableValueRange<int>(1, 20)
+                )
+            );
+            RootsPoints = rootsPointsEntry.Value;
+
+            var calderaPointsEntry = config.Bind(
+                "BiomePoints",
+                "CalderaPoints",
+                5,
+                new ConfigDescription(
+                    "Points for Caldera biome (★★★★★ Very Hard)",
+                    new AcceptableValueRange<int>(1, 20)
+                )
+            );
+            CalderaPoints = calderaPointsEntry.Value;
+
+            var kilnPointsEntry = config.Bind(
+                "BiomePoints",
+                "KilnPoints",
+                6,
+                new ConfigDescription(
+                    "Points for Kiln/Summit (★★★★★+ Extreme)",
+                    new AcceptableValueRange<int>(1, 20)
+                )
+            );
+            KilnPoints = kilnPointsEntry.Value;
 
             // UI Settings
             var scoreboardXEntry = config.Bind(
@@ -225,38 +249,50 @@ namespace PEAKCompetitive.Configuration
             Plugin.Logger.LogInfo($"Competitive Mode: {EnableCompetitiveMode}");
             Plugin.Logger.LogInfo($"Teams: {MaxTeams} teams of {PlayersPerTeam}");
             Plugin.Logger.LogInfo($"Items Persist: {ItemsPersist}");
-            Plugin.Logger.LogInfo($"Map Points: M1={Map1Points}, M2={Map2Points}, M3={Map3Points}, M4={Map4Points}, Ruth's={RuthsMapPoints}");
+            Plugin.Logger.LogInfo($"Individual Bonus: {IndividualCompletionMultiplier}x per survivor");
+            Plugin.Logger.LogInfo($"Full Team Bonus: {EnableFullTeamBonus}");
+            Plugin.Logger.LogInfo($"Biome Points: Shore={ShorePoints}, Tropics={TropicsPoints}, Mesa={MesaPoints}, Alpine={AlpinePoints}, Roots={RootsPoints}, Caldera={CalderaPoints}, Kiln={KilnPoints}");
             Plugin.Logger.LogInfo("=====================================");
         }
 
         public static int GetMapPoints(string mapName)
         {
-            // PEAK biome names: Shore, Tropics, Roots, Alpine, Mesa, Caldera, Kiln, Summit
-            // Map1 = Shore (easy tutorial)
-            // Map2 = Tropics/Roots (medium jungle/forest)
-            // Map3 = Alpine/Mesa (hard snow/desert)
-            // Map4 = Caldera (very hard volcano slopes)
-            // RuthsMap = Kiln (extreme inner volcano)
+            // PEAK biome difficulty progression:
+            // Shore (1★) → Tropics (2★) → Mesa (3★) → Alpine (4★) → Roots (4★) → Caldera (5★) → Kiln (5★+)
 
             string mapLower = mapName.ToLower();
 
+            // Shore - Easy tutorial beach (1 point)
             if (mapLower.Contains("shore") || mapLower.Contains("coast") || mapLower.Contains("beach"))
-                return Map1Points;
+                return ShorePoints;
 
-            if (mapLower.Contains("tropics") || mapLower.Contains("jungle") || mapLower.Contains("roots") || mapLower.Contains("redwood"))
-                return Map2Points;
+            // Tropics - Moderate jungle (2 points)
+            if (mapLower.Contains("tropics") || mapLower.Contains("jungle") || mapLower.Contains("tropical"))
+                return TropicsPoints;
 
-            if (mapLower.Contains("alpine") || mapLower.Contains("snow") || mapLower.Contains("mesa") || mapLower.Contains("desert"))
-                return Map3Points;
+            // Mesa - Moderate+ desert (3 points)
+            if (mapLower.Contains("mesa") || mapLower.Contains("desert") || mapLower.Contains("cactus"))
+                return MesaPoints;
 
+            // Alpine - Hard snowy mountain (4 points)
+            if (mapLower.Contains("alpine") || mapLower.Contains("snow") || mapLower.Contains("ice"))
+                return AlpinePoints;
+
+            // Roots - Hard dark forest (4 points)
+            if (mapLower.Contains("roots") || mapLower.Contains("redwood") || mapLower.Contains("forest"))
+                return RootsPoints;
+
+            // Caldera - Very hard volcano slopes (5 points)
             if (mapLower.Contains("caldera") || mapLower.Contains("volcano"))
-                return Map4Points;
+                return CalderaPoints;
 
+            // Kiln/Summit - Extreme inner volcano (6 points)
             if (mapLower.Contains("kiln") || mapLower.Contains("summit") || mapLower.Contains("peak"))
-                return RuthsMapPoints;
+                return KilnPoints;
 
-            // Default to 1 point if map not recognized
-            return 1;
+            // Default to Shore points if biome not recognized
+            Plugin.Logger.LogWarning($"Unknown biome '{mapName}', defaulting to {ShorePoints} points");
+            return ShorePoints;
         }
     }
 }

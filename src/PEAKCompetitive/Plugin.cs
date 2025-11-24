@@ -23,6 +23,12 @@ namespace PEAKCompetitive
             gameObject.AddComponent<Configuration.ScoreboardUI>();
             gameObject.AddComponent<Configuration.CompetitiveMenuUI>();
             gameObject.AddComponent<Configuration.MatchNotificationUI>();
+            gameObject.AddComponent<Configuration.RoundTimerUI>();
+
+            // Initialize managers
+            _ = Util.NetworkSyncManager.Instance;
+            _ = Util.RoundTimerManager.Instance;
+            _ = Util.RoundTransitionManager.Instance;
 
             // Apply all Harmony patches
             _harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);

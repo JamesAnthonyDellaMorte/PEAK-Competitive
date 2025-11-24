@@ -48,7 +48,10 @@ namespace PEAKCompetitive.Configuration
         private void OnGUI()
         {
             if (!ConfigurationHandler.ShowScoreboard) return;
-            if (!MatchState.Instance.IsMatchActive) return;
+
+            // Show scoreboard if teams have been assigned (even before match starts)
+            var matchState = MatchState.Instance;
+            if (matchState.Teams.Count == 0 || matchState.Teams.All(t => t.Members.Count == 0)) return;
 
             InitializeStyles();
 
@@ -121,7 +124,7 @@ namespace PEAKCompetitive.Configuration
             GUILayout.EndHorizontal();
 
             // Player names
-            string playerNames = string.Join(", ", team.Members.Select(p => p.UserId));
+            string playerNames = string.Join(", ", team.Members.Select(p => Util.TeamManager.GetPlayerDisplayName(p)));
             GUILayout.Label($"  {playerNames}", GUI.skin.label);
 
             GUILayout.Space(5);

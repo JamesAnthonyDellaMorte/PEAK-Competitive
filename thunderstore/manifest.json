@@ -1,0 +1,9 @@
+{
+    "name": "PEAKCompetitive",
+    "version_number": "1.0.0",
+    "website_url": "https://github.com/yourusername/PEAK-Competitive",
+    "description": "Competitive duo team racing mod with difficulty-based scoring, survivor bonuses, and team ghost mechanics",
+    "dependencies": [
+        "BepInEx-BepInExPack-5.4.2100"
+    ]
+}

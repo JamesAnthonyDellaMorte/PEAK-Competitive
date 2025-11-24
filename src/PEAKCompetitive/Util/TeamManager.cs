@@ -3,6 +3,7 @@ using System.Linq;
 using Photon.Pun;
 using Photon.Realtime;
 using PEAKCompetitive.Model;
+using Steamworks;
 
 namespace PEAKCompetitive.Util
 {
@@ -149,6 +150,43 @@ namespace PEAKCompetitive.Util
             }
 
             return "#FFFFFF";
+        }
+
+        public static string GetPlayerDisplayName(Photon.Realtime.Player player)
+        {
+            // Try to get Steam name from UserId
+            if (!string.IsNullOrEmpty(player.UserId))
+            {
+                try
+                {
+                    // Parse Steam ID from Photon UserId
+                    if (ulong.TryParse(player.UserId, out ulong steamId64))
+                    {
+                        CSteamID steamId = new CSteamID(steamId64);
+                        string steamName = SteamFriends.GetFriendPersonaName(steamId);
+
+                        if (!string.IsNullOrEmpty(steamName))
+                        {
+                            return steamName;
+                        }
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Plugin.Logger.LogWarning($"Failed to get Steam name for player: {ex.Message}");
+                }
+            }
+
+            // Fallback to NickName if set and not a hash
+            if (!string.IsNullOrEmpty(player.NickName) &&
+                !player.NickName.Contains("-") &&
+                player.NickName.Length < 20)
+            {
+                return player.NickName;
+            }
+
+            // Final fallback to "Player X" based on actor number
+            return $"Player {player.ActorNumber}";
         }
     }
 }
