@@ -234,6 +234,304 @@ public class MyPatch
 
 ---
 
-**Last Updated:** 2025-11-22
-**Build Status:** ✅ Passing
-**Output:** PEAKCompetitive.dll (35 KB)
+## PEAK Game Systems - Critical Knowledge
+
+### Character System (MUST KNOW!)
+
+**Key Concepts:**
+- `Character.AllCharacters` - Static list of ALL character instances in the game
+- Each character has a `PhotonView` component (`character.view`)
+- Character's `view.IsMine` indicates if it's the local player
+- `character.refs.afflictions` - CharacterAfflictions system for health/status
+
+**Getting Characters:**
+```csharp
+// Get local player's character
+foreach (var character in Character.AllCharacters)
+{
+    if (character.view.IsMine)
+    {
+        return character; // This is the local player
+    }
+}
+
+// Get character by Photon player
+foreach (var character in Character.AllCharacters)
+{
+    if (character.view.Owner.ActorNumber == player.ActorNumber)
+    {
+        return character;
+    }
+}
+```
+
+**Character Death/Health:**
+```csharp
+// Kill a character
+character.refs.afflictions.SetStatus(CharacterAfflictions.STATUSTYPE.Injury, 100f);
+
+// Revive a character
+character.refs.afflictions.ClearAllStatus(false);
+```
+
+**Important:** Use reflection to discover PEAK's internal methods - they may have dedicated death/revive methods that aren't documented.
+
+### Campfire System
+
+**Critical Discovery:** PEAK has a `Campfire` class that spawns at biome checkpoints.
+
+**Key Properties:**
+- `campfire.advanceToSegment` - Which biome this campfire advances to (use for progression)
+- `campfire.transform.position` - Location of the campfire
+- Campfires spawn via `Campfire.Awake()` - patch this to detect them!
+
+**Finding Campfires:**
+```csharp
+// Find all campfires in current scene
+var campfires = UnityEngine.Object.FindObjectsByType<Campfire>(FindObjectsSortMode.None);
+
+// Get next biome's campfire
+var nextCampfire = campfires.OrderByDescending(c => c.advanceToSegment).FirstOrDefault();
+```
+
+**Campfire Interaction:**
+```csharp
+[HarmonyPatch(typeof(Campfire), "Awake")]
+public class CampfireAwakePatch
+{
+    static void Postfix(Campfire __instance)
+    {
+        // Add custom interaction component
+        __instance.gameObject.AddComponent<YourInteractionComponent>();
+    }
+}
+```
+
+### Network Synchronization - CRITICAL!
+
+**THE MOST IMPORTANT THING:** `PhotonNetwork.AddCallbackTarget(this)`
+
+**Problem:** MonoBehaviourPunCallbacks doesn't automatically register with PhotonNetwork!
+**Solution:** Explicitly register in OnEnable():
+
+```csharp
+public class NetworkSyncManager : MonoBehaviourPunCallbacks
+{
+    public override void OnEnable()
+    {
+        base.OnEnable();
+        PhotonNetwork.AddCallbackTarget(this); // CRITICAL!
+        Plugin.Logger.LogInfo("Registered with Photon callbacks");
+    }
+
+    public override void OnDisable()
+    {
+        base.OnDisable();
+        PhotonNetwork.RemoveCallbackTarget(this);
+    }
+
+    // Now this will actually be called!
+    public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
+    {
+        // Handle property changes
+    }
+}
+```
+
+**Without `AddCallbackTarget`, callbacks WILL NOT FIRE!** This caused hours of debugging.
+
+**Room Custom Properties Pattern:**
+```csharp
+// Host sets properties
+var props = new ExitGames.Client.Photon.Hashtable
+{
+    { "MatchActive", true },
+    { "TeamAssignments", "0:1,2;1:3,4" } // team:players
+};
+PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+
+// All clients receive via OnRoomPropertiesUpdate
+public override void OnRoomPropertiesUpdate(Hashtable changes)
+{
+    if (changes.ContainsKey("MatchActive"))
+    {
+        bool active = (bool)changes["MatchActive"];
+        // Update local state
+    }
+}
+```
+
+### Steamworks Integration
+
+**Problem:** `player.NickName` shows SHA hashes instead of Steam names
+
+**Solution:** Use Steamworks API to get real Steam names:
+```csharp
+using Steamworks;
+
+public static string GetPlayerDisplayName(Photon.Realtime.Player player)
+{
+    // Parse Steam ID from Photon UserId
+    if (ulong.TryParse(player.UserId, out ulong steamId64))
+    {
+        CSteamID steamId = new CSteamID(steamId64);
+        string steamName = SteamFriends.GetFriendPersonaName(steamId);
+
+        if (!string.IsNullOrEmpty(steamName))
+        {
+            return steamName; // Real Steam name!
+        }
+    }
+
+    // Fallback
+    return $"Player {player.ActorNumber}";
+}
+```
+
+**Key Insight:** Photon's `player.UserId` contains the Steam ID as a string. Parse it as ulong, wrap in CSteamID, then use SteamFriends API.
+
+### Round System Architecture
+
+**Game Flow:**
+1. Teams assigned via `TeamManager.AssignPlayersToTeams()`
+2. Match starts → `MatchState.Instance.StartMatch()` → `IsMatchActive = true`
+3. Players race to campfire
+4. **First team reaches campfire:**
+   - Points awarded based on `ScoringCalculator.CalculateRoundPoints()`
+   - 10-minute timer starts via `RoundTimerManager.Instance.StartTimer()`
+   - Synced to all clients via `NetworkSyncManager.Instance.SyncTimerStart()`
+5. **Other teams can finish during timer**
+6. **Timer expires or all teams finish:**
+   - `RoundTransitionManager.Instance.StartTransition()`
+   - Kill all players → Wait 2s → Revive all → Wait 1s → Teleport to next campfire → Start new round
+7. **Repeat** through biome progression: Shore → Tropics → Mesa → Alpine → Roots → Caldera → Kiln
+8. **At Kiln:** Match ends, winner determined
+
+**Manager Responsibilities:**
+- `RoundTimerManager` - Countdown timer, expiration detection
+- `RoundTransitionManager` - Kill/revive/teleport coordination
+- `NetworkSyncManager` - State synchronization to all clients
+- `CharacterHelper` - PEAK game integration (reflection + direct API)
+- `TeamManager` - Team assignment and queries
+
+### Reflection Strategy for PEAK Integration
+
+**Why:** PEAK's internal methods aren't documented, and may change between versions.
+
+**Pattern:**
+```csharp
+static CharacterHelper()
+{
+    Type characterType = typeof(Character);
+    MethodInfo[] methods = characterType.GetMethods(
+        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+    // Find methods by name pattern
+    _killMethod = methods.FirstOrDefault(m =>
+        m.Name.Contains("Die") ||
+        m.Name.Contains("Kill") ||
+        m.Name.Contains("Death"));
+
+    Plugin.Logger.LogInfo($"Found Kill Method: {_killMethod?.Name ?? "None"}");
+}
+
+// Later, invoke if found
+if (_killMethod != null)
+{
+    _killMethod.Invoke(character, null);
+}
+```
+
+**Fallback Strategy:**
+1. Try reflection to find PEAK's native methods
+2. If not found, use direct API (`CharacterAfflictions`)
+3. Log what was used for debugging
+
+### Thunderstore Deployment
+
+**CRITICAL:** Users install via Thunderstore Mod Manager (r2modman), not manually!
+
+**Profile-based Installation:**
+- Mods go to: `AppData/Roaming/Thunderstore Mod Manager/DataFolder/PEAK/profiles/{profile}/BepInEx/plugins/`
+- NOT the game's direct BepInEx folder!
+- Each profile is isolated
+
+**When testing:**
+1. Build DLL: `dotnet build --configuration Release`
+2. Copy to Thunderstore profile: `{profile}/BepInEx/plugins/PEAKCompetitive/`
+3. Launch game via Thunderstore Mod Manager
+4. Check logs: `{profile}/BepInEx/LogOutput.log`
+
+### Common Pitfalls & Solutions
+
+**1. "Callbacks not firing"**
+- ✅ **Solution:** Add `PhotonNetwork.AddCallbackTarget(this)` in OnEnable()
+
+**2. "Seeing SHA hashes instead of player names"**
+- ✅ **Solution:** Use `SteamFriends.GetFriendPersonaName(CSteamID)` with parsed UserId
+
+**3. "Type 'Player' is ambiguous"**
+- ✅ **Solution:** Always use `Photon.Realtime.Player` explicitly
+
+**4. "Scoreboard only shows for host"**
+- ✅ **Solution:** Sync via Room Custom Properties + AddCallbackTarget
+
+**5. "FindObjectsOfType deprecated warning"**
+- ✅ **Solution:** Use `FindObjectsByType<T>(FindObjectsSortMode.None)`
+
+**6. "Character not found"**
+- ✅ **Solution:** Iterate `Character.AllCharacters`, check `character.view.IsMine` or `character.view.Owner.ActorNumber`
+
+**7. "Players not teleporting"**
+- ✅ **Solution:** Only teleport if `character.view.IsMine`, each client teleports their own character
+
+**8. "Changes not appearing in-game"**
+- ✅ **Solution:** Make sure DLL is copied to Thunderstore profile folder, not game folder
+
+### Key Files Reference
+
+**Core Systems:**
+- `Plugin.cs` - Entry point, initializes managers
+- `MatchState.cs` - Global match state singleton
+- `TeamData.cs` - Team info and members
+
+**Managers:**
+- `TeamManager.cs` - Team operations, player name display
+- `NetworkSyncManager.cs` - Photon synchronization
+- `RoundTimerManager.cs` - Timer system
+- `RoundTransitionManager.cs` - Round transitions
+- `CharacterHelper.cs` - PEAK game integration
+
+**Patches:**
+- `CampfireInteractionPatch.cs` - Detects campfire arrivals
+- `SummitDetectionPatch.cs` - Placeholder for future summit detection
+
+**UI:**
+- `ScoreboardUI.cs` - Live scoreboard display
+- `RoundTimerUI.cs` - Timer display
+- `CompetitiveMenuUI.cs` - F3 configuration menu
+
+### PEAKLib Integration (Optional)
+
+**Located at:** `../PEAKLib` (sibling directory)
+
+**Useful Modules:**
+- `PEAKLib.Core.Networking` - NetworkManager component (attached to Characters)
+- `PEAKLib.Core.Hooks.CharacterRegistrationHooks` - Detects character spawn
+- `PEAKLib.Stats.CharacterAfflictionsHooks` - Status effect system
+
+**Pattern for hooking character registration:**
+```csharp
+CharacterRegistrationHooks.OnCharacterAdded += (Character character) =>
+{
+    // Character just spawned
+    character.gameObject.AddComponent<YourComponent>();
+};
+```
+
+---
+
+**Last Updated:** 2025-11-24
+**Build Status:** ✅ Passing (0 Warnings, 0 Errors)
+**Output:** PEAKCompetitive.dll
+**Latest Commit:** 7a4bf1d - Complete competitive round system
