@@ -14,6 +14,7 @@ namespace PEAKCompetitive.Model
         public int RoundsWon { get; set; }
         public int FinishPlacement { get; set; } // 1st, 2nd, 3rd team to finish
         public HashSet<int> PlayersWhoReached { get; set; } // Track which players reached (by ActorNumber)
+        public HashSet<int> GhostPlayersWhoReached { get; set; } // Track which ghosts reached (don't count for points)
 
         public TeamData(int teamId, string teamName)
         {
@@ -25,6 +26,7 @@ namespace PEAKCompetitive.Model
             RoundsWon = 0;
             FinishPlacement = 0;
             PlayersWhoReached = new HashSet<int>();
+            GhostPlayersWhoReached = new HashSet<int>();
         }
 
         public void AddMember(Photon.Realtime.Player player)
@@ -51,6 +53,7 @@ namespace PEAKCompetitive.Model
             HasReachedSummit = false;
             FinishPlacement = 0;
             PlayersWhoReached.Clear();
+            GhostPlayersWhoReached.Clear();
         }
 
         public void ResetMatch()
@@ -60,6 +63,7 @@ namespace PEAKCompetitive.Model
             HasReachedSummit = false;
             FinishPlacement = 0;
             PlayersWhoReached.Clear();
+            GhostPlayersWhoReached.Clear();
         }
 
         public bool IsPlayerOnTeam(Photon.Realtime.Player player)
@@ -90,20 +94,24 @@ namespace PEAKCompetitive.Model
 
         /// <summary>
         /// Get count of non-ghost players who reached the campfire
+        /// Uses the tracked ghost status from arrival time, not current status
         /// </summary>
         public int GetNonGhostArrivals()
         {
-            int count = 0;
-            foreach (int actorNumber in PlayersWhoReached)
+            // Count players who reached minus those who were ghosts at arrival
+            return PlayersWhoReached.Count - GhostPlayersWhoReached.Count;
+        }
+
+        /// <summary>
+        /// Record a player arriving at the campfire
+        /// </summary>
+        public void RecordArrival(int actorNumber, bool wasGhost)
+        {
+            PlayersWhoReached.Add(actorNumber);
+            if (wasGhost)
             {
-                // Find the character for this actor number
-                var character = CharacterHelper.GetCharacterByActorNumber(actorNumber);
-                if (character != null && !character.IsGhost)
-                {
-                    count++;
-                }
+                GhostPlayersWhoReached.Add(actorNumber);
             }
-            return count;
         }
     }
 }

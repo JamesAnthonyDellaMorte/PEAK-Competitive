@@ -124,16 +124,30 @@ Added `UnityEngine.TextRenderingModule` for UI types:
 # Restore NuGet packages
 dotnet restore
 
-# Build Release version
+# Build Release version (for playing - NO fly mode)
 dotnet build --configuration Release
+
+# Build Debug version (for testing - WITH fly mode)
+dotnet build --configuration Debug
 
 # Clean and rebuild
 dotnet clean && dotnet restore && dotnet build --configuration Release
 ```
 
+### Build Configurations
+
+| Configuration | Command | Fly Mode | Output Location |
+|---------------|---------|----------|-----------------|
+| **Release** | `dotnet build --configuration Release` | ❌ No | `artifacts/bin/Release/` |
+| **Debug** | `dotnet build --configuration Debug` | ✅ Yes (F4) | `artifacts/bin/Debug/` |
+
+**Use Release for playing with friends** - no cheats available!
+**Use Debug for solo testing** - fly mode enabled for testing campfire detection.
+
 ### Build Output
-- **DLL:** `artifacts/bin/Release/PEAKCompetitive.dll` (~35 KB)
-- **PDB:** `artifacts/bin/Release/PEAKCompetitive.pdb` (debug symbols)
+- **Release DLL:** `artifacts/bin/Release/PEAKCompetitive.dll`
+- **Debug DLL:** `artifacts/bin/Debug/PEAKCompetitive.dll`
+- **PDB:** Debug symbols included for debugging
 
 ## Installation
 
@@ -555,9 +569,28 @@ CharacterRegistrationHooks.OnCharacterAdded += (Character character) =>
 };
 ```
 
+### Debug Mode Features (Debug Build Only)
+
+**Fly Mode** - For testing campfire detection and point scoring
+- Toggle: **F4** (keyboard) or **L3+R3** (controller - click both sticks)
+- Movement: **WASD / Left Stick**
+- Up: **Space / A button (Cross)**
+- Down: **Left Shift / B button (Circle)**
+- Speed Boost: **Left Ctrl / LT (L2)**
+
+Fly mode is compiled out in Release builds - no temptation when playing for real!
+
 ---
 
 ## Recent Changes
+
+### 2025-11-25 - Fly Mode & Campfire Detection Fixes
+- ✅ Added debug-only fly mode (F4 / L3+R3) with full controller support
+- ✅ Fly mode only included in Debug builds (compile-time flag)
+- ✅ Fixed campfire detection - now only triggers for NEXT campfire, not spawn campfire
+- ✅ Added segment-based validation (Beach → Tropics → Alpine → Caldera → TheKiln → Peak)
+- ✅ Added 5-second grace period after round start before detection begins
+- ✅ Reduced detection radius from 15m to 10m for precision
 
 ### 2025-11-25 - Placement-Based Scoring System
 - ✅ Implemented placement-based scoring (1st=100%, 2nd=70%, 3rd=50%, 4th+=30%)
@@ -570,5 +603,5 @@ CharacterRegistrationHooks.OnCharacterAdded += (Character character) =>
 
 **Last Updated:** 2025-11-25
 **Build Status:** ✅ Passing (0 Warnings, 0 Errors)
-**Output:** PEAKCompetitive.dll
+**Output:** PEAKCompetitive.dll (Release) / PEAKCompetitive.dll (Debug with fly mode)
 **Decompiled Source:** C:\Users\della\Desktop\Assembly-CSharp

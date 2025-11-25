@@ -30,6 +30,12 @@ namespace PEAKCompetitive
             _ = Util.RoundTimerManager.Instance;
             _ = Util.RoundTransitionManager.Instance;
 
+#if DEBUG_MODE
+            // Add fly mode manager for testing (F4 to toggle) - DEBUG BUILDS ONLY
+            gameObject.AddComponent<Util.FlyModeManager>();
+            Logger.LogWarning("DEBUG MODE ENABLED - Fly mode available (F4)");
+#endif
+
             // Apply all Harmony patches
             _harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
             _harmony.PatchAll();
@@ -37,6 +43,9 @@ namespace PEAKCompetitive
             Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded!");
             Logger.LogInfo("Competitive features enabled!");
             Logger.LogInfo("Press F3 to open competitive menu");
+#if DEBUG_MODE
+            Logger.LogInfo("Press F4 to toggle fly mode (DEBUG BUILD)");
+#endif
         }
 
         private void OnDestroy()

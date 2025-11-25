@@ -348,7 +348,7 @@ namespace PEAKCompetitive.Util
         }
 
         // RPC for non-host players to notify host of campfire arrival
-        public void NotifyHostOfCampfireArrival(int playerActorNumber, int teamId)
+        public void NotifyHostOfCampfireArrival(int playerActorNumber, int teamId, bool isGhost)
         {
             if (_photonView == null)
             {
@@ -356,16 +356,17 @@ namespace PEAKCompetitive.Util
                 return;
             }
 
-            Plugin.Logger.LogInfo($"Sending RPC to host: Player {playerActorNumber} from team {teamId} reached campfire");
-            _photonView.RPC("RPC_PlayerReachedCampfire", RpcTarget.MasterClient, playerActorNumber, teamId);
+            Plugin.Logger.LogInfo($"Sending RPC to host: Player {playerActorNumber} from team {teamId} reached campfire (ghost: {isGhost})");
+            _photonView.RPC("RPC_PlayerReachedCampfire", RpcTarget.MasterClient, playerActorNumber, teamId, isGhost);
         }
 
         [PunRPC]
-        private void RPC_PlayerReachedCampfire(int playerActorNumber, int teamId)
+        private void RPC_PlayerReachedCampfire(int playerActorNumber, int teamId, bool isGhost)
         {
             if (!PhotonNetwork.IsMasterClient) return;
 
-            Plugin.Logger.LogInfo($"RPC received: Player {playerActorNumber} from team {teamId} reached campfire");
+            Plugin.Logger.LogInfo($"=== RPC RECEIVED: CAMPFIRE ARRIVAL ===");
+            Plugin.Logger.LogInfo($"Player {playerActorNumber} from team {teamId} reached campfire (ghost: {isGhost})");
 
             var matchState = MatchState.Instance;
             var team = matchState.Teams.FirstOrDefault(t => t.TeamId == teamId);
@@ -376,18 +377,19 @@ namespace PEAKCompetitive.Util
                 return;
             }
 
-            // Add this player to the team's reached list
+            // Check if player already reached
             if (team.PlayersWhoReached.Contains(playerActorNumber))
             {
                 Plugin.Logger.LogInfo($"Player {playerActorNumber} already reached - ignoring duplicate");
                 return;
             }
 
-            team.PlayersWhoReached.Add(playerActorNumber);
-            Plugin.Logger.LogInfo($"Player {playerActorNumber} from {team.TeamName} reached! ({team.PlayersWhoReached.Count}/{team.Members.Count})");
+            // Record the arrival with ghost status
+            team.RecordArrival(playerActorNumber, isGhost);
+            Plugin.Logger.LogInfo($"Player {playerActorNumber} from {team.TeamName} reached! ({team.PlayersWhoReached.Count}/{team.Members.Count}, ghost: {isGhost})");
 
-            // Check if this is the first player from this team
-            if (team.PlayersWhoReached.Count == 1)
+            // Check if this is the first player from this team (to set placement)
+            if (team.FinishPlacement == 0)
             {
                 // First member arrived - determine placement
                 int placement = GetNextPlacement();
@@ -404,27 +406,30 @@ namespace PEAKCompetitive.Util
                 }
             }
 
-            // Count non-ghost members who reached
+            // Count non-ghost members who reached (using tracked ghost status at arrival time)
             int nonGhostArrivals = team.GetNonGhostArrivals();
-            Plugin.Logger.LogInfo($"{team.TeamName}: {nonGhostArrivals} non-ghost members reached (ghosts don't count)");
+            Plugin.Logger.LogInfo($"{team.TeamName}: {nonGhostArrivals} non-ghost members reached, {team.GhostPlayersWhoReached.Count} ghosts (ghosts don't count)");
 
-            // Calculate points: placement multiplier × base points × non-ghost arrivals
-            if (nonGhostArrivals > 0)
+            // Calculate and award points immediately for this arrival (if not a ghost)
+            if (!isGhost)
             {
                 int baseMapPoints = Configuration.ConfigurationHandler.GetMapPoints(matchState.CurrentMapName);
                 float placementMultiplier = GetPlacementMultiplier(team.FinishPlacement);
-                int totalPoints = (int)(baseMapPoints * placementMultiplier * nonGhostArrivals);
+                int pointsForThisPlayer = (int)(baseMapPoints * placementMultiplier);
 
-                team.AddScore(totalPoints);
-                Plugin.Logger.LogInfo($"{team.TeamName} earned {totalPoints} points! (Placement #{team.FinishPlacement}: {placementMultiplier}x × {baseMapPoints} base × {nonGhostArrivals} members)");
+                // Use Score directly instead of AddScore to avoid incrementing RoundsWon multiple times
+                team.Score += pointsForThisPlayer;
+                Plugin.Logger.LogInfo($"=== POINTS AWARDED ===");
+                Plugin.Logger.LogInfo($"{team.TeamName} +{pointsForThisPlayer} points! (Placement #{team.FinishPlacement}: {placementMultiplier:F1}x × {baseMapPoints} base)");
                 Plugin.Logger.LogInfo($"{team.TeamName} new total: {team.Score} points");
             }
             else
             {
-                Plugin.Logger.LogWarning($"{team.TeamName} gets 0 points - all members are ghosts!");
+                Plugin.Logger.LogWarning($"Player {playerActorNumber} is a ghost - 0 points awarded!");
             }
 
-            // Sync to all clients
+            // Sync scores to all clients immediately
+            Plugin.Logger.LogInfo("Syncing team scores to all clients...");
             SyncTeamAssignments();
 
             // Check if all teams have finished

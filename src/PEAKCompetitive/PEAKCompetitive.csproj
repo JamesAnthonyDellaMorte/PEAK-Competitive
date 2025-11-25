@@ -16,6 +16,11 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
+  <!-- Debug build: Enable fly mode and other debug features -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DefineConstants>$(DefineConstants);DEBUG_MODE</DefineConstants>
+  </PropertyGroup>
+
   <PropertyGroup>
     <RestoreAdditionalProjectSources>
       https://nuget.bepinex.dev/v3/index.json
