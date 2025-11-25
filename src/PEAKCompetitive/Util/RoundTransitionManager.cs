@@ -53,21 +53,9 @@ namespace PEAKCompetitive.Util
 
         private void KillAllPlayers()
         {
-            // Get all characters
-            foreach (var character in Character.AllCharacters)
-            {
-                if (character == null) continue;
-
-                Plugin.Logger.LogInfo($"Killing character with ViewID: {character.view?.ViewID}");
-
-                // Kill the character using CharacterHelper
-                CharacterHelper.KillCharacter(character);
-            }
-
-            // Sync kill event to all clients
+            // Send RPC to all clients to kill their own character
             NetworkSyncManager.Instance.SyncKillAllPlayers();
-
-            Plugin.Logger.LogInfo($"Killed {Character.AllCharacters.Count} characters");
+            Plugin.Logger.LogInfo("Sent kill RPC to all clients");
         }
 
         private void ReviveAllPlayers()
@@ -75,28 +63,18 @@ namespace PEAKCompetitive.Util
             // Get next campfire position for teleportation
             Vector3? teleportPos = CharacterHelper.GetNextCampfirePosition();
 
-            // Revive all characters
-            foreach (var character in Character.AllCharacters)
+            if (teleportPos.HasValue)
             {
-                if (character == null) continue;
-
-                Plugin.Logger.LogInfo($"Reviving character with ViewID: {character.view?.ViewID}");
-
-                // Revive the character
-                CharacterHelper.ReviveCharacter(character);
-
-                // Teleport to next campfire if position found
-                if (teleportPos.HasValue)
-                {
-                    CharacterHelper.TeleportCharacter(character, teleportPos.Value);
-                    Plugin.Logger.LogInfo($"Teleported character to next campfire at {teleportPos.Value}");
-                }
+                Plugin.Logger.LogInfo($"Next campfire position: {teleportPos.Value}");
+            }
+            else
+            {
+                Plugin.Logger.LogWarning("No campfire found for teleportation!");
             }
 
-            // Sync revive event to all clients
-            NetworkSyncManager.Instance.SyncReviveAllPlayers();
-
-            Plugin.Logger.LogInfo($"Revived and teleported {Character.AllCharacters.Count} characters");
+            // Send RPC to all clients to revive and teleport their own character
+            NetworkSyncManager.Instance.SyncReviveAllPlayers(teleportPos);
+            Plugin.Logger.LogInfo("Sent revive & teleport RPC to all clients");
         }
 
         private void StartNextRound()

@@ -218,6 +218,31 @@ namespace PEAKCompetitive.Util
         }
 
         /// <summary>
+        /// Get a character by Photon actor number
+        /// </summary>
+        public static Character GetCharacterByActorNumber(int actorNumber)
+        {
+            try
+            {
+                foreach (var character in Character.AllCharacters)
+                {
+                    if (character != null && character.view != null &&
+                        character.view.Owner != null &&
+                        character.view.Owner.ActorNumber == actorNumber)
+                    {
+                        return character;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Logger.LogError($"Failed to get character for actor {actorNumber}: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Get the next campfire position for teleportation
         /// </summary>
         public static Vector3? GetNextCampfirePosition()

@@ -179,11 +179,15 @@ namespace PEAKCompetitive.Configuration
             // Start match
             Model.MatchState.Instance.StartMatch();
 
+            // Start first round on Shore
+            Model.MatchState.Instance.StartRound("Shore");
+
             // Sync to all clients
             Util.NetworkSyncManager.Instance.SyncTeamAssignments();
             Util.NetworkSyncManager.Instance.SyncMatchStart();
+            Util.NetworkSyncManager.Instance.SyncRoundStart("Shore");
 
-            Plugin.Logger.LogInfo("Match started and synced!");
+            Plugin.Logger.LogInfo("Match started and synced! Round 1 active on Shore.");
         }
 
         private void EndMatch()

@@ -214,12 +214,38 @@ public class MyPatch
 - Check `ManagedDir` path in `.csproj`
 - Ensure trailing backslash: `C:\...\Managed\`
 
+## Decompiled Game Source
+
+**Location:** `C:\Users\della\Desktop\Assembly-CSharp`
+
+The complete decompiled PEAK source code (using dnSpy) is available for reference. Key files to examine:
+
+**Networking Patterns:**
+- `RunManager.cs` - Main game state manager, uses RPCs for time sync
+- `OrbFogHandler.cs` - Example of `AddCallbackTarget` pattern with `IInRoomCallbacks`
+- `Peak/Network/CachedPlayerList.cs` - Example of `OnRoomPropertiesUpdate` usage
+- `Character.cs` - Character system with ghost detection (`character.IsGhost`)
+
+**How to Use:**
+1. Download dnSpy: https://github.com/dnSpy/dnSpy/releases
+2. Open `Steam\steamapps\common\PEAK\PEAK_Data\Managed\Assembly-CSharp.dll`
+3. Search for classes/methods to understand game internals
+4. Export to project (right-click → Export to Project) for full source browsing
+
+**Key Discoveries from Decompiled Code:**
+- `character.IsGhost` property for ghost detection (line 52-56 in Character.cs)
+- `character.data.dead` for death state
+- `WarpPlayer(Vector3 position, bool poof)` for teleportation (line 166)
+- `RPCA_Die()` and `RPCA_Revive()` for death/revival
+- Photon patterns: `AddCallbackTarget` in `OnEnable()`, `RemoveCallbackTarget` in `OnDisable()`
+
 ## References
 
 - **PEAK-Unlimited:** Reference mod that inspired build configuration
 - **BepInEx Docs:** https://docs.bepinex.dev/
 - **Harmony Docs:** https://harmony.pardeike.net/
 - **Photon PUN 2 Docs:** https://doc.photonengine.com/pun/current/
+- **dnSpy:** https://github.com/dnSpy/dnSpy - .NET decompiler for examining game code
 
 ## Commit History
 
@@ -531,7 +557,18 @@ CharacterRegistrationHooks.OnCharacterAdded += (Character character) =>
 
 ---
 
-**Last Updated:** 2025-11-24
+## Recent Changes
+
+### 2025-11-25 - Placement-Based Scoring System
+- ✅ Implemented placement-based scoring (1st=100%, 2nd=70%, 3rd=50%, 4th+=30%)
+- ✅ Added ghost detection using `character.IsGhost` from decompiled source
+- ✅ Track individual player arrivals at campfires (not just team-based)
+- ✅ Award points per non-ghost member: `Placement Multiplier × Base Points × Non-Ghost Members`
+- ✅ Teams with all ghost members get 0 points
+- ✅ Fixed network synchronization - all players see scoreboard updates
+- ✅ Added comprehensive debug logging for score sync verification
+
+**Last Updated:** 2025-11-25
 **Build Status:** ✅ Passing (0 Warnings, 0 Errors)
 **Output:** PEAKCompetitive.dll
-**Latest Commit:** 7a4bf1d - Complete competitive round system
+**Decompiled Source:** C:\Users\della\Desktop\Assembly-CSharp

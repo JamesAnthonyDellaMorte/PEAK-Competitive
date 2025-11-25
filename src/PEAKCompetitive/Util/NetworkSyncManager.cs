@@ -5,12 +5,14 @@ using PEAKCompetitive.Configuration;
 using System.Linq;
 using System.Collections.Generic;
 using ExitGames.Client.Photon;
+using UnityEngine;
 
 namespace PEAKCompetitive.Util
 {
     public class NetworkSyncManager : MonoBehaviourPunCallbacks
     {
         private const string PROP_MATCH_ACTIVE = "MatchActive";
+        private const string PROP_ROUND_ACTIVE = "RoundActive";
         private const string PROP_ROUND = "Round";
         private const string PROP_MAP_NAME = "MapName";
         private const string PROP_TEAM_ASSIGNMENTS = "TeamAssignments";
@@ -20,6 +22,7 @@ namespace PEAKCompetitive.Util
 
         private static NetworkSyncManager _instance;
         private static Character _localCharacter;
+        private PhotonView _photonView;
 
         public static NetworkSyncManager Instance
         {
@@ -29,6 +32,8 @@ namespace PEAKCompetitive.Util
                 {
                     var go = new UnityEngine.GameObject("NetworkSyncManager");
                     _instance = go.AddComponent<NetworkSyncManager>();
+                    _instance._photonView = go.AddComponent<PhotonView>();
+                    _instance._photonView.ViewID = 999; // Fixed ViewID for NetworkSyncManager
                     UnityEngine.Object.DontDestroyOnLoad(go);
                 }
                 return _instance;
@@ -116,6 +121,14 @@ namespace PEAKCompetitive.Util
                 bool isActive = (bool)propertiesThatChanged[PROP_MATCH_ACTIVE];
                 matchState.IsMatchActive = isActive;
                 Plugin.Logger.LogInfo($"Match active updated: {isActive}");
+            }
+
+            // Round active state changed
+            if (propertiesThatChanged.ContainsKey(PROP_ROUND_ACTIVE))
+            {
+                bool roundActive = (bool)propertiesThatChanged[PROP_ROUND_ACTIVE];
+                matchState.IsRoundActive = roundActive;
+                Plugin.Logger.LogInfo($"Round active updated: {roundActive}");
             }
 
             // Team assignments changed
@@ -210,7 +223,10 @@ namespace PEAKCompetitive.Util
             if (string.IsNullOrEmpty(scoreData)) return;
 
             var matchState = MatchState.Instance;
-            Plugin.Logger.LogInfo($"Applying team scores: {scoreData}");
+
+            bool isHost = PhotonNetwork.IsMasterClient;
+            string clientType = isHost ? "[HOST]" : "[CLIENT]";
+            Plugin.Logger.LogInfo($"{clientType} Applying team scores: {scoreData}");
 
             // Parse "teamId:score;teamId:score;..."
             string[] scores = scoreData.Split(';');
@@ -228,9 +244,11 @@ namespace PEAKCompetitive.Util
                 if (team != null)
                 {
                     team.Score = score;
-                    Plugin.Logger.LogInfo($"Updated {team.TeamName} score to {score}");
+                    Plugin.Logger.LogInfo($"{clientType} Updated {team.TeamName} score to {score} (MatchState updated!)");
                 }
             }
+
+            Plugin.Logger.LogInfo($"{clientType} Score sync complete - ScoreboardUI should now display these scores");
         }
 
         // Sync timer start
@@ -255,12 +273,13 @@ namespace PEAKCompetitive.Util
 
             var props = new Hashtable
             {
+                { PROP_ROUND_ACTIVE, true },
                 { PROP_MAP_NAME, mapName },
                 { PROP_ROUND, MatchState.Instance.CurrentRound }
             };
 
             PhotonNetwork.CurrentRoom.SetCustomProperties(props);
-            Plugin.Logger.LogInfo($"Synced round start: {mapName}");
+            Plugin.Logger.LogInfo($"Synced round start: Round {MatchState.Instance.CurrentRound} on {mapName}");
         }
 
         // Sync kill all players
@@ -268,15 +287,205 @@ namespace PEAKCompetitive.Util
         {
             if (!PhotonNetwork.IsMasterClient) return;
             Plugin.Logger.LogInfo("Syncing kill all players event");
-            // TODO: Implement via RPC or custom property
+
+            if (_photonView != null)
+            {
+                _photonView.RPC("RPC_KillAllPlayers", RpcTarget.All);
+            }
+        }
+
+        [PunRPC]
+        private void RPC_KillAllPlayers()
+        {
+            Plugin.Logger.LogInfo("RPC_KillAllPlayers received - killing local character");
+
+            var localChar = CharacterHelper.GetLocalCharacter();
+            if (localChar != null)
+            {
+                CharacterHelper.KillCharacter(localChar);
+            }
         }
 
         // Sync revive all players
-        public void SyncReviveAllPlayers()
+        public void SyncReviveAllPlayers(Vector3? teleportPosition)
         {
             if (!PhotonNetwork.IsMasterClient) return;
             Plugin.Logger.LogInfo("Syncing revive all players event");
-            // TODO: Implement via RPC or custom property
+
+            if (_photonView != null)
+            {
+                // Serialize position as float array or send null flag
+                if (teleportPosition.HasValue)
+                {
+                    float[] pos = new float[] { teleportPosition.Value.x, teleportPosition.Value.y, teleportPosition.Value.z };
+                    _photonView.RPC("RPC_ReviveAllPlayers", RpcTarget.All, pos);
+                }
+                else
+                {
+                    _photonView.RPC("RPC_ReviveAllPlayers", RpcTarget.All, null);
+                }
+            }
+        }
+
+        [PunRPC]
+        private void RPC_ReviveAllPlayers(float[] position)
+        {
+            Plugin.Logger.LogInfo("RPC_ReviveAllPlayers received - reviving local character");
+
+            var localChar = CharacterHelper.GetLocalCharacter();
+            if (localChar != null)
+            {
+                CharacterHelper.ReviveCharacter(localChar);
+
+                // Teleport if position provided
+                if (position != null && position.Length == 3)
+                {
+                    Vector3 teleportPos = new Vector3(position[0], position[1], position[2]);
+                    CharacterHelper.TeleportCharacter(localChar, teleportPos);
+                    Plugin.Logger.LogInfo($"Teleported to {teleportPos}");
+                }
+            }
+        }
+
+        // RPC for non-host players to notify host of campfire arrival
+        public void NotifyHostOfCampfireArrival(int playerActorNumber, int teamId)
+        {
+            if (_photonView == null)
+            {
+                Plugin.Logger.LogError("PhotonView is null! Cannot send RPC.");
+                return;
+            }
+
+            Plugin.Logger.LogInfo($"Sending RPC to host: Player {playerActorNumber} from team {teamId} reached campfire");
+            _photonView.RPC("RPC_PlayerReachedCampfire", RpcTarget.MasterClient, playerActorNumber, teamId);
+        }
+
+        [PunRPC]
+        private void RPC_PlayerReachedCampfire(int playerActorNumber, int teamId)
+        {
+            if (!PhotonNetwork.IsMasterClient) return;
+
+            Plugin.Logger.LogInfo($"RPC received: Player {playerActorNumber} from team {teamId} reached campfire");
+
+            var matchState = MatchState.Instance;
+            var team = matchState.Teams.FirstOrDefault(t => t.TeamId == teamId);
+
+            if (team == null)
+            {
+                Plugin.Logger.LogWarning($"Team {teamId} not found!");
+                return;
+            }
+
+            // Add this player to the team's reached list
+            if (team.PlayersWhoReached.Contains(playerActorNumber))
+            {
+                Plugin.Logger.LogInfo($"Player {playerActorNumber} already reached - ignoring duplicate");
+                return;
+            }
+
+            team.PlayersWhoReached.Add(playerActorNumber);
+            Plugin.Logger.LogInfo($"Player {playerActorNumber} from {team.TeamName} reached! ({team.PlayersWhoReached.Count}/{team.Members.Count})");
+
+            // Check if this is the first player from this team
+            if (team.PlayersWhoReached.Count == 1)
+            {
+                // First member arrived - determine placement
+                int placement = GetNextPlacement();
+                team.FinishPlacement = placement;
+                team.HasReachedSummit = true;
+
+                Plugin.Logger.LogInfo($"{team.TeamName} is #{placement} to reach the campfire!");
+
+                // Start timer when first team arrives
+                if (placement == 1)
+                {
+                    Plugin.Logger.LogInfo("First team arrived - starting 10-minute timer!");
+                    RoundTimerManager.Instance.StartTimer();
+                }
+            }
+
+            // Count non-ghost members who reached
+            int nonGhostArrivals = team.GetNonGhostArrivals();
+            Plugin.Logger.LogInfo($"{team.TeamName}: {nonGhostArrivals} non-ghost members reached (ghosts don't count)");
+
+            // Calculate points: placement multiplier × base points × non-ghost arrivals
+            if (nonGhostArrivals > 0)
+            {
+                int baseMapPoints = Configuration.ConfigurationHandler.GetMapPoints(matchState.CurrentMapName);
+                float placementMultiplier = GetPlacementMultiplier(team.FinishPlacement);
+                int totalPoints = (int)(baseMapPoints * placementMultiplier * nonGhostArrivals);
+
+                team.AddScore(totalPoints);
+                Plugin.Logger.LogInfo($"{team.TeamName} earned {totalPoints} points! (Placement #{team.FinishPlacement}: {placementMultiplier}x × {baseMapPoints} base × {nonGhostArrivals} members)");
+                Plugin.Logger.LogInfo($"{team.TeamName} new total: {team.Score} points");
+            }
+            else
+            {
+                Plugin.Logger.LogWarning($"{team.TeamName} gets 0 points - all members are ghosts!");
+            }
+
+            // Sync to all clients
+            SyncTeamAssignments();
+
+            // Check if all teams have finished
+            if (AllTeamsFinished())
+            {
+                Plugin.Logger.LogInfo("All teams finished! Ending round early...");
+                RoundTimerManager.Instance.StopTimer();
+                RoundTransitionManager.Instance.StartTransition();
+            }
+        }
+
+        /// <summary>
+        /// Get the next available placement (1st, 2nd, 3rd, etc.)
+        /// </summary>
+        private int GetNextPlacement()
+        {
+            var matchState = MatchState.Instance;
+            int maxPlacement = 0;
+
+            foreach (var team in matchState.Teams)
+            {
+                if (team.FinishPlacement > maxPlacement)
+                {
+                    maxPlacement = team.FinishPlacement;
+                }
+            }
+
+            return maxPlacement + 1;
+        }
+
+        /// <summary>
+        /// Get point multiplier based on placement
+        /// 1st place = 1.0x (100%)
+        /// 2nd place = 0.7x (70%)
+        /// 3rd place = 0.5x (50%)
+        /// 4th+ place = 0.3x (30%)
+        /// </summary>
+        private float GetPlacementMultiplier(int placement)
+        {
+            switch (placement)
+            {
+                case 1: return 1.0f;  // 1st place: full points
+                case 2: return 0.7f;  // 2nd place: 70%
+                case 3: return 0.5f;  // 3rd place: 50%
+                default: return 0.3f; // 4th+: 30%
+            }
+        }
+
+        private bool AllTeamsFinished()
+        {
+            var matchState = MatchState.Instance;
+
+            foreach (var team in matchState.Teams)
+            {
+                if (!team.HasReachedSummit)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

@@ -89,66 +89,23 @@ namespace PEAKCompetitive.Patches
 
         private void OnTeamReachedSummit(TeamData team, Character character)
         {
+            Plugin.Logger.LogInfo($"Local player from {team.TeamName} reached campfire!");
+
+            // Get local player info
+            var localPlayer = PhotonNetwork.LocalPlayer;
+
             if (!PhotonNetwork.IsMasterClient)
             {
-                // Non-host: Send message to host
-                // TODO: Use RPC to notify host
-                Plugin.Logger.LogInfo($"Player reached campfire, notifying host...");
-                return;
+                // Non-host: Send RPC to notify host
+                Plugin.Logger.LogInfo($"Notifying host via RPC: Team {team.TeamId}, Player {localPlayer.ActorNumber}");
+                NetworkSyncManager.Instance.NotifyHostOfCampfireArrival(localPlayer.ActorNumber, team.TeamId);
             }
-
-            Plugin.Logger.LogInfo($"{team.TeamName} reached the campfire!");
-
-            // Mark team as reached summit
-            team.HasReachedSummit = true;
-
-            // Check if this is the first team to finish
-            bool isFirstTeam = !RoundTimerManager.Instance.IsTimerActive;
-
-            if (isFirstTeam)
+            else
             {
-                Plugin.Logger.LogInfo($"{team.TeamName} is the FIRST team to reach the campfire! Starting 10-minute timer...");
-                RoundTimerManager.Instance.StartTimer();
+                // Host: Process directly
+                Plugin.Logger.LogInfo($"Host processing campfire arrival for Team {team.TeamId}");
+                NetworkSyncManager.Instance.NotifyHostOfCampfireArrival(localPlayer.ActorNumber, team.TeamId);
             }
-
-            // Count living team members
-            int livingMembers = team.GetAlivePlayersCount();
-
-            Plugin.Logger.LogInfo($"{team.TeamName} has {livingMembers}/{team.Members.Count} members alive");
-
-            // Calculate and award points
-            int baseMapPoints = Configuration.ConfigurationHandler.GetMapPoints(MatchState.Instance.CurrentMapName);
-            float totalPoints = ScoringCalculator.CalculateRoundPoints(team, baseMapPoints, livingMembers);
-
-            team.AddScore((int)totalPoints);
-
-            Plugin.Logger.LogInfo($"{team.TeamName} earned {totalPoints} points! New total: {team.Score}");
-
-            // Sync to all clients
-            NetworkSyncManager.Instance.SyncTeamAssignments(); // Includes scores
-
-            // Check if all teams have finished
-            if (AllTeamsFinished())
-            {
-                Plugin.Logger.LogInfo("All teams finished! Ending round early...");
-                RoundTimerManager.Instance.StopTimer();
-                RoundTransitionManager.Instance.StartTransition();
-            }
-        }
-
-        private bool AllTeamsFinished()
-        {
-            var matchState = MatchState.Instance;
-
-            foreach (var team in matchState.Teams)
-            {
-                if (!team.HasReachedSummit)
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
     }
 }

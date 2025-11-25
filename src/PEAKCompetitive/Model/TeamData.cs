@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Photon.Realtime;
+using PEAKCompetitive.Util;
 
 namespace PEAKCompetitive.Model
 {
@@ -11,6 +12,8 @@ namespace PEAKCompetitive.Model
         public List<Photon.Realtime.Player> Members { get; set; }
         public bool HasReachedSummit { get; set; }
         public int RoundsWon { get; set; }
+        public int FinishPlacement { get; set; } // 1st, 2nd, 3rd team to finish
+        public HashSet<int> PlayersWhoReached { get; set; } // Track which players reached (by ActorNumber)
 
         public TeamData(int teamId, string teamName)
         {
@@ -20,6 +23,8 @@ namespace PEAKCompetitive.Model
             Members = new List<Photon.Realtime.Player>();
             HasReachedSummit = false;
             RoundsWon = 0;
+            FinishPlacement = 0;
+            PlayersWhoReached = new HashSet<int>();
         }
 
         public void AddMember(Photon.Realtime.Player player)
@@ -44,6 +49,8 @@ namespace PEAKCompetitive.Model
         public void ResetRoundState()
         {
             HasReachedSummit = false;
+            FinishPlacement = 0;
+            PlayersWhoReached.Clear();
         }
 
         public void ResetMatch()
@@ -51,6 +58,8 @@ namespace PEAKCompetitive.Model
             Score = 0;
             RoundsWon = 0;
             HasReachedSummit = false;
+            FinishPlacement = 0;
+            PlayersWhoReached.Clear();
         }
 
         public bool IsPlayerOnTeam(Photon.Realtime.Player player)
@@ -77,6 +86,24 @@ namespace PEAKCompetitive.Model
             // TODO: Count ghosts in team
             // return Members.Count - GetAlivePlayersCount();
             return 0;
+        }
+
+        /// <summary>
+        /// Get count of non-ghost players who reached the campfire
+        /// </summary>
+        public int GetNonGhostArrivals()
+        {
+            int count = 0;
+            foreach (int actorNumber in PlayersWhoReached)
+            {
+                // Find the character for this actor number
+                var character = CharacterHelper.GetCharacterByActorNumber(actorNumber);
+                if (character != null && !character.IsGhost)
+                {
+                    count++;
+                }
+            }
+            return count;
         }
     }
 }
