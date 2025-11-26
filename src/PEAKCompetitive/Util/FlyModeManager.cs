@@ -162,18 +162,15 @@ namespace PEAKCompetitive.Util
         {
             bool newState = !IsFlyModeActive;
 
-            // Sync to all players via room properties
+            // Always apply locally immediately
+            SetFlyModeState(newState);
+
+            // Also sync to other players via room properties
             if (PhotonNetwork.InRoom)
             {
-                Plugin.Logger.LogInfo($"FlyModeManager: Syncing fly mode to all players: {newState}");
+                Plugin.Logger.LogInfo($"FlyModeManager: Syncing fly mode to other players: {newState}");
                 var props = new Hashtable { { FLY_MODE_KEY, newState } };
                 PhotonNetwork.CurrentRoom.SetCustomProperties(props);
-                // State will be set via OnRoomPropertiesUpdate callback
-            }
-            else
-            {
-                // Not in a room, just set locally (solo play)
-                SetFlyModeState(newState);
             }
         }
 

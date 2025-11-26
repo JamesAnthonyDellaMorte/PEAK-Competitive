@@ -61,14 +61,14 @@ namespace PEAKCompetitive.Patches
     [HarmonyPatch(typeof(PlayerConnectionLog), "OnPlayerLeftRoom")]
     public class OnPlayerLeftRoomPatch
     {
-        static void Postfix(Photon.Realtime.Player otherPlayer)
+        static void Postfix(Photon.Realtime.Player newPlayer)
         {
             if (!PhotonNetwork.IsMasterClient) return;
 
-            Plugin.Logger.LogInfo($"Player left: {otherPlayer.UserId}");
+            Plugin.Logger.LogInfo($"Player left: {newPlayer.UserId}");
 
             // Remove from team
-            TeamManager.RemovePlayer(otherPlayer);
+            TeamManager.RemovePlayer(newPlayer);
 
             // Check if match should end (not enough players)
             var matchState = Model.MatchState.Instance;
