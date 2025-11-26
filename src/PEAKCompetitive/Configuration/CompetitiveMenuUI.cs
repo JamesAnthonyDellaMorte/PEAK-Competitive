@@ -6,20 +6,49 @@ namespace PEAKCompetitive.Configuration
     public class CompetitiveMenuUI : MonoBehaviour
     {
         private bool _showMenu = false;
-        private Rect _windowRect = new Rect(Screen.width / 2 - 300, Screen.height / 2 - 250, 600, 500);
+        private Rect _windowRect;
         private Vector2 _scrollPosition = Vector2.zero;
+        private bool _initialized = false;
+
+        private const string PREF_WINDOW_X = "PEAKCompetitive_MenuX";
+        private const string PREF_WINDOW_Y = "PEAKCompetitive_MenuY";
+
+        private void Start()
+        {
+            // Load saved position or center on screen
+            float defaultX = Screen.width / 2f - 300f;
+            float defaultY = Screen.height / 2f - 250f;
+
+            float savedX = PlayerPrefs.GetFloat(PREF_WINDOW_X, defaultX);
+            float savedY = PlayerPrefs.GetFloat(PREF_WINDOW_Y, defaultY);
+
+            // Clamp to screen bounds
+            savedX = Mathf.Clamp(savedX, 0, Screen.width - 600);
+            savedY = Mathf.Clamp(savedY, 0, Screen.height - 500);
+
+            _windowRect = new Rect(savedX, savedY, 600, 500);
+            _initialized = true;
+        }
 
         private void Update()
         {
             if (Input.GetKeyDown(ConfigurationHandler.MenuKey))
             {
                 _showMenu = !_showMenu;
+
+                // Save position when closing
+                if (!_showMenu && _initialized)
+                {
+                    PlayerPrefs.SetFloat(PREF_WINDOW_X, _windowRect.x);
+                    PlayerPrefs.SetFloat(PREF_WINDOW_Y, _windowRect.y);
+                    PlayerPrefs.Save();
+                }
             }
         }
 
         private void OnGUI()
         {
-            if (!_showMenu) return;
+            if (!_showMenu || !_initialized) return;
 
             _windowRect = GUI.Window(0, _windowRect, DrawMenuWindow, "PEAK Competitive Settings");
         }
