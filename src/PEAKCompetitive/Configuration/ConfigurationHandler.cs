@@ -30,11 +30,6 @@ namespace PEAKCompetitive.Configuration
         public static int CalderaPoints { get; set; }    // ★★★★★ Very Hard
         public static int KilnPoints { get; set; }       // ★★★★★+ Extreme
 
-        // UI Settings
-        public static float ScoreboardX { get; set; }
-        public static float ScoreboardY { get; set; }
-        public static float ScoreboardScale { get; set; }
-
         // Debug
         public static bool EnableDebugLogging { get; private set; }
 
@@ -195,40 +190,6 @@ namespace PEAKCompetitive.Configuration
                 )
             );
             KilnPoints = kilnPointsEntry.Value;
-
-            // UI Settings
-            var scoreboardXEntry = config.Bind(
-                "UI",
-                "ScoreboardX",
-                10f,
-                new ConfigDescription(
-                    "Scoreboard X position (pixels from left)",
-                    new AcceptableValueRange<float>(0f, 1920f)
-                )
-            );
-            ScoreboardX = scoreboardXEntry.Value;
-
-            var scoreboardYEntry = config.Bind(
-                "UI",
-                "ScoreboardY",
-                10f,
-                new ConfigDescription(
-                    "Scoreboard Y position (pixels from top)",
-                    new AcceptableValueRange<float>(0f, 1080f)
-                )
-            );
-            ScoreboardY = scoreboardYEntry.Value;
-
-            var scoreboardScaleEntry = config.Bind(
-                "UI",
-                "ScoreboardScale",
-                1.0f,
-                new ConfigDescription(
-                    "Scoreboard scale multiplier",
-                    new AcceptableValueRange<float>(0.5f, 3.0f)
-                )
-            );
-            ScoreboardScale = scoreboardScaleEntry.Value;
 
             // Debug
             var enableDebugLoggingEntry = config.Bind(
