@@ -1,6 +1,7 @@
 using UnityEngine;
 using PEAKCompetitive.Model;
 using System.Linq;
+using Photon.Pun;
 
 namespace PEAKCompetitive.Configuration
 {
@@ -75,11 +76,18 @@ namespace PEAKCompetitive.Configuration
             float width = 300f;
             float baseHeight = 100f;
             float teamHeight = 60f;
+            float nicknameDisplayHeight = 60f; // For "Others see your name as:" section
 
             var matchState = MatchState.Instance;
             int teamCount = matchState.Teams.Count;
 
             float totalHeight = baseHeight + (teamCount * teamHeight);
+
+            // Add space for nickname display if host and match active
+            if (PhotonNetwork.IsMasterClient && matchState.IsMatchActive)
+            {
+                totalHeight += nicknameDisplayHeight;
+            }
 
             GUILayout.BeginArea(new Rect(0, 0, width, totalHeight), _boxStyle);
 
@@ -97,6 +105,22 @@ namespace PEAKCompetitive.Configuration
             foreach (var team in sortedTeams)
             {
                 DrawTeamScore(team);
+            }
+
+            // Show what others see (host nickname) if we're the host
+            if (PhotonNetwork.IsMasterClient && matchState.IsMatchActive)
+            {
+                GUILayout.Space(10);
+                GUILayout.Label("─────────────────", _teamStyle);
+                GUILayout.Label("Others see your name as:", _teamStyle);
+
+                var nickStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = 11,
+                    wordWrap = true,
+                    normal = { textColor = Color.cyan }
+                };
+                GUILayout.Label(PhotonNetwork.LocalPlayer.NickName, nickStyle);
             }
 
             GUILayout.EndArea();
