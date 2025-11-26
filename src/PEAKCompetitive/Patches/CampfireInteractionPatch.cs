@@ -132,6 +132,62 @@ namespace PEAKCompetitive.Patches
 
         private void CheckLocalPlayerProximity()
         {
+            // If we're the host, check ALL players (since only host has the mod)
+            // If we're not the host, just check local player
+            if (PhotonNetwork.IsMasterClient)
+            {
+                CheckAllPlayersProximity();
+            }
+            else
+            {
+                CheckSinglePlayerProximity();
+            }
+        }
+
+        /// <summary>
+        /// Host-only: Check all players in the game for campfire proximity
+        /// </summary>
+        private void CheckAllPlayersProximity()
+        {
+            Vector3 campfirePos = campfire.transform.position;
+
+            // Iterate through ALL characters in the game
+            foreach (var character in Character.AllCharacters)
+            {
+                if (character == null || character.view == null) continue;
+
+                // Get the Photon player who owns this character
+                var owner = character.view.Owner;
+                if (owner == null) continue;
+
+                // Skip if already detected at this campfire
+                if (_detectedPlayers.Contains(owner.ActorNumber)) continue;
+
+                // Calculate distance
+                Vector3 playerPos = character.Center;
+                float distance = Vector3.Distance(playerPos, campfirePos);
+
+                // Check if within detection radius
+                if (distance <= DETECTION_RADIUS)
+                {
+                    Plugin.Logger.LogInfo($"[Host Detection] Player {owner.ActorNumber} reached campfire! Distance: {distance:F1}m");
+                    OnPlayerReachedCampfireHostDetected(owner, character);
+                }
+            }
+
+            // Debug log occasionally (every 5 seconds)
+            if (Time.frameCount % 300 == 0)
+            {
+                int playerCount = Character.AllCharacters?.Count ?? 0;
+                Plugin.Logger.LogInfo($"[Host Campfire Check] Monitoring {playerCount} players for {campfire.advanceToSegment} campfire");
+            }
+        }
+
+        /// <summary>
+        /// Non-host: Only check local player (fallback if non-host also has mod)
+        /// </summary>
+        private void CheckSinglePlayerProximity()
+        {
             // Get local character using CharacterHelper
             var localCharacter = CharacterHelper.GetLocalCharacter();
             if (localCharacter == null) return;
@@ -161,6 +217,45 @@ namespace PEAKCompetitive.Patches
             }
         }
 
+        /// <summary>
+        /// Called when host detects ANY player reaching the campfire (host-only detection)
+        /// Since we're the host, we process directly instead of sending RPC
+        /// </summary>
+        private void OnPlayerReachedCampfireHostDetected(Photon.Realtime.Player player, Character character)
+        {
+            // Mark as detected to avoid spam
+            _detectedPlayers.Add(player.ActorNumber);
+
+            // Check if player is a ghost
+            bool isGhost = character.IsGhost;
+
+            Plugin.Logger.LogInfo($"");
+            Plugin.Logger.LogInfo($"========================================");
+            Plugin.Logger.LogInfo($"=== HOST DETECTED CAMPFIRE ARRIVAL ===");
+            Plugin.Logger.LogInfo($"========================================");
+            Plugin.Logger.LogInfo($"Player: {TeamManager.GetPlayerDisplayName(player)} (Actor {player.ActorNumber})");
+            Plugin.Logger.LogInfo($"Campfire advances to: {campfire.advanceToSegment}");
+            Plugin.Logger.LogInfo($"Is Ghost: {isGhost}");
+
+            // Get player's team
+            var team = TeamManager.GetPlayerTeam(player);
+            if (team == null)
+            {
+                Plugin.Logger.LogWarning($"Player {player.ActorNumber} not assigned to any team!");
+                return;
+            }
+
+            Plugin.Logger.LogInfo($"Team: {team.TeamName} (ID: {team.TeamId})");
+
+            // Since we ARE the host, call the RPC handler directly (simulates receiving RPC)
+            Plugin.Logger.LogInfo($"Processing arrival directly (we are host)...");
+            NetworkSyncManager.Instance.ProcessCampfireArrival(player.ActorNumber, team.TeamId, isGhost);
+        }
+
+        /// <summary>
+        /// Called when non-host player detects themselves reaching campfire
+        /// Sends RPC to host for processing
+        /// </summary>
         private void OnPlayerReachedCampfire(Photon.Realtime.Player player, Character character)
         {
             // Mark as detected to avoid spam

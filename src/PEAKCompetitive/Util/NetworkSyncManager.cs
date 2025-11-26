@@ -360,6 +360,23 @@ namespace PEAKCompetitive.Util
             _photonView.RPC("RPC_PlayerReachedCampfire", RpcTarget.MasterClient, playerActorNumber, teamId, isGhost);
         }
 
+        /// <summary>
+        /// Process a campfire arrival. Called directly by host or via RPC from clients.
+        /// </summary>
+        public void ProcessCampfireArrival(int playerActorNumber, int teamId, bool isGhost)
+        {
+            if (!PhotonNetwork.IsMasterClient)
+            {
+                Plugin.Logger.LogWarning("ProcessCampfireArrival called on non-host - ignoring");
+                return;
+            }
+
+            Plugin.Logger.LogInfo($"=== PROCESSING CAMPFIRE ARRIVAL ===");
+            Plugin.Logger.LogInfo($"Player {playerActorNumber} from team {teamId} reached campfire (ghost: {isGhost})");
+
+            ProcessCampfireArrivalInternal(playerActorNumber, teamId, isGhost);
+        }
+
         [PunRPC]
         private void RPC_PlayerReachedCampfire(int playerActorNumber, int teamId, bool isGhost)
         {
@@ -367,6 +384,15 @@ namespace PEAKCompetitive.Util
 
             Plugin.Logger.LogInfo($"=== RPC RECEIVED: CAMPFIRE ARRIVAL ===");
             Plugin.Logger.LogInfo($"Player {playerActorNumber} from team {teamId} reached campfire (ghost: {isGhost})");
+
+            ProcessCampfireArrivalInternal(playerActorNumber, teamId, isGhost);
+        }
+
+        /// <summary>
+        /// Internal method that actually processes the campfire arrival
+        /// </summary>
+        private void ProcessCampfireArrivalInternal(int playerActorNumber, int teamId, bool isGhost)
+        {
 
             var matchState = MatchState.Instance;
             var team = matchState.Teams.FirstOrDefault(t => t.TeamId == teamId);
