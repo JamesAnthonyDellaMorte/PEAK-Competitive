@@ -24,6 +24,11 @@ namespace PEAKCompetitive.Util
         private static Character _localCharacter;
         private PhotonView _photonView;
 
+        // Store original nicknames to restore later
+        private string _originalNickName;
+        private bool _nickNameModified = false;
+        private Dictionary<int, string> _originalPlayerNickNames = new Dictionary<int, string>();
+
         public static NetworkSyncManager Instance
         {
             get
@@ -106,6 +111,115 @@ namespace PEAKCompetitive.Util
             PhotonNetwork.CurrentRoom.SetCustomProperties(props);
             Plugin.Logger.LogInfo($"Synced teams: {string.Join(";", teamData)}");
             Plugin.Logger.LogInfo($"Synced scores: {string.Join(";", scoreData)}");
+
+            // Update host nickname with scoreboard so all players can see scores
+            UpdateNicknameWithScoreboard();
+        }
+
+        /// <summary>
+        /// Updates the host's nickname to include team rosters and scores.
+        /// All players can see this when looking at the host's player name tag.
+        /// Format: "R:Name1,Name2=150|B:Name3,Name4=100"
+        /// </summary>
+        private void UpdateNicknameWithScoreboard()
+        {
+            if (!PhotonNetwork.IsMasterClient) return;
+            if (!MatchState.Instance.IsMatchActive) return;
+
+            // Store original nickname on first call
+            if (!_nickNameModified)
+            {
+                _originalNickName = PhotonNetwork.LocalPlayer.NickName;
+                _nickNameModified = true;
+                Plugin.Logger.LogInfo($"Stored original nickname: {_originalNickName}");
+            }
+
+            // Build team roster with scores
+            var matchState = MatchState.Instance;
+            var teamStrings = new List<string>();
+
+            foreach (var team in matchState.Teams.OrderByDescending(t => t.Score))
+            {
+                string teamAbbr = GetTeamAbbreviation(team.TeamId);
+
+                // Get short player names (first name or truncated)
+                var playerNames = team.Members.Select(p => GetShortPlayerName(p)).ToList();
+                string roster = string.Join(",", playerNames);
+
+                teamStrings.Add($"{teamAbbr}:{roster}={team.Score}");
+            }
+
+            string scoreboard = string.Join("|", teamStrings);
+
+            // If too long, fall back to just scores
+            if (scoreboard.Length > 32)
+            {
+                // Try shorter format: just scores
+                var shortStrings = matchState.Teams
+                    .OrderByDescending(t => t.Score)
+                    .Select(t => $"{GetTeamAbbreviation(t.TeamId)}:{t.Score}");
+                scoreboard = string.Join(" ", shortStrings);
+            }
+
+            // Still too long? Truncate
+            if (scoreboard.Length > 32)
+            {
+                scoreboard = scoreboard.Substring(0, 32);
+            }
+
+            PhotonNetwork.LocalPlayer.NickName = scoreboard;
+            Plugin.Logger.LogInfo($"Updated host nickname to: {scoreboard}");
+        }
+
+        /// <summary>
+        /// Get a short version of a player's name (max 6 chars)
+        /// </summary>
+        private string GetShortPlayerName(Photon.Realtime.Player player)
+        {
+            string name = TeamManager.GetPlayerDisplayName(player);
+
+            // If name has space, use first part
+            if (name.Contains(" "))
+            {
+                name = name.Split(' ')[0];
+            }
+
+            // Truncate to 6 chars
+            if (name.Length > 6)
+            {
+                name = name.Substring(0, 6);
+            }
+
+            return name;
+        }
+
+        /// <summary>
+        /// Get a short abbreviation for team display
+        /// </summary>
+        private string GetTeamAbbreviation(int teamId)
+        {
+            switch (teamId)
+            {
+                case 0: return "R";  // Red
+                case 1: return "B";  // Blue
+                case 2: return "G";  // Green
+                case 3: return "Y";  // Yellow
+                case 4: return "P";  // Purple
+                default: return $"T{teamId}";
+            }
+        }
+
+        /// <summary>
+        /// Restore the host's original nickname when match ends
+        /// </summary>
+        public void RestoreOriginalNickname()
+        {
+            if (_nickNameModified && !string.IsNullOrEmpty(_originalNickName))
+            {
+                PhotonNetwork.LocalPlayer.NickName = _originalNickName;
+                _nickNameModified = false;
+                Plugin.Logger.LogInfo($"Restored original nickname: {_originalNickName}");
+            }
         }
 
         // Handle room property changes

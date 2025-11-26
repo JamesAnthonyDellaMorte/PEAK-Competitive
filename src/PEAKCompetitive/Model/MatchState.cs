@@ -153,6 +153,9 @@ namespace PEAKCompetitive.Model
 
             WinningTeam = GetLeadingTeam();
 
+            // Restore host's original nickname (remove scoreboard from name)
+            Util.NetworkSyncManager.Instance.RestoreOriginalNickname();
+
             if (WinningTeam != null)
             {
                 Plugin.Logger.LogInfo($"Match ended! {WinningTeam.TeamName} wins with {WinningTeam.Score} points!");
@@ -210,6 +213,9 @@ namespace PEAKCompetitive.Model
 
         public void Reset()
         {
+            // Restore host's original nickname
+            Util.NetworkSyncManager.Instance.RestoreOriginalNickname();
+
             Teams.Clear();
             IsMatchActive = false;
             IsRoundActive = false;
