@@ -1,5 +1,8 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Photon.Pun;
+using Photon.Realtime;
+using ExitGames.Client.Photon;
 
 namespace PEAKCompetitive.Util
 {
@@ -8,11 +11,15 @@ namespace PEAKCompetitive.Util
     /// Press F4 (keyboard) or L3+R3 (controller) to toggle fly mode.
     /// WASD/Left Stick to move, Space/A to go up, Shift/B to go down
     /// Hold Ctrl/LT for speed boost.
+    ///
+    /// Networked: When any player toggles fly mode, it syncs to all players with the mod.
     /// </summary>
-    public class FlyModeManager : MonoBehaviour
+    public class FlyModeManager : MonoBehaviourPunCallbacks
     {
         private static FlyModeManager _instance;
         public static FlyModeManager Instance => _instance;
+
+        private const string FLY_MODE_KEY = "FlyModeEnabled";
 
         public bool IsFlyModeActive { get; private set; } = false;
 
@@ -41,6 +48,46 @@ namespace PEAKCompetitive.Util
 
             // Initialize input actions
             InitializeInputActions();
+        }
+
+        public override void OnEnable()
+        {
+            base.OnEnable();
+            PhotonNetwork.AddCallbackTarget(this);
+        }
+
+        public override void OnDisable()
+        {
+            base.OnDisable();
+            PhotonNetwork.RemoveCallbackTarget(this);
+        }
+
+        public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
+        {
+            if (propertiesThatChanged.ContainsKey(FLY_MODE_KEY))
+            {
+                bool newState = (bool)propertiesThatChanged[FLY_MODE_KEY];
+                Plugin.Logger.LogInfo($"FlyModeManager: Received fly mode sync: {newState}");
+
+                if (newState != IsFlyModeActive)
+                {
+                    SetFlyModeState(newState);
+                }
+            }
+        }
+
+        public override void OnJoinedRoom()
+        {
+            // Check if fly mode is already enabled in the room
+            if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(FLY_MODE_KEY, out object value))
+            {
+                bool roomFlyMode = (bool)value;
+                if (roomFlyMode && !IsFlyModeActive)
+                {
+                    Plugin.Logger.LogInfo("FlyModeManager: Joining room with fly mode enabled");
+                    SetFlyModeState(true);
+                }
+            }
         }
 
         private void InitializeInputActions()
@@ -113,16 +160,35 @@ namespace PEAKCompetitive.Util
 
         public void ToggleFlyMode()
         {
-            IsFlyModeActive = !IsFlyModeActive;
+            bool newState = !IsFlyModeActive;
 
+            // Sync to all players via room properties
+            if (PhotonNetwork.InRoom)
+            {
+                Plugin.Logger.LogInfo($"FlyModeManager: Syncing fly mode to all players: {newState}");
+                var props = new Hashtable { { FLY_MODE_KEY, newState } };
+                PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+                // State will be set via OnRoomPropertiesUpdate callback
+            }
+            else
+            {
+                // Not in a room, just set locally (solo play)
+                SetFlyModeState(newState);
+            }
+        }
+
+        private void SetFlyModeState(bool enabled)
+        {
             _localCharacter = CharacterHelper.GetLocalCharacter();
 
             if (_localCharacter == null)
             {
-                Plugin.Logger.LogWarning("Cannot toggle fly mode - no local character found!");
+                Plugin.Logger.LogWarning("Cannot set fly mode - no local character found!");
                 IsFlyModeActive = false;
                 return;
             }
+
+            IsFlyModeActive = enabled;
 
             if (IsFlyModeActive)
             {
