@@ -1,6 +1,7 @@
 using UnityEngine;
 using Photon.Pun;
 using PEAKCompetitive.Model;
+using PEAKCompetitive.Patches;
 using System.Collections;
 
 namespace PEAKCompetitive.Util
@@ -34,19 +35,27 @@ namespace PEAKCompetitive.Util
 
         private IEnumerator TransitionSequence()
         {
+            // Mark round as inactive to prevent campfire detection during transition
+            MatchState.Instance.IsRoundActive = false;
+            Plugin.Logger.LogInfo("Round marked inactive during transition");
+
             // Step 1: Kill all players
             Plugin.Logger.LogInfo("Step 1: Killing all players...");
             KillAllPlayers();
 
             yield return new WaitForSeconds(2f); // Wait 2 seconds
 
-            // Step 2: Revive all players
-            Plugin.Logger.LogInfo("Step 2: Reviving all players...");
-            ReviveAllPlayers();
+            // Step 2: Get next campfire position BEFORE reviving
+            Vector3? teleportPos = CharacterHelper.GetNextCampfirePosition();
+            Plugin.Logger.LogInfo($"Next campfire position: {(teleportPos.HasValue ? teleportPos.Value.ToString() : "NOT FOUND")}");
+
+            // Step 3: Revive all players at campfire position
+            Plugin.Logger.LogInfo("Step 2: Reviving all players at campfire...");
+            ReviveAllPlayersAtPosition(teleportPos);
 
             yield return new WaitForSeconds(1f); // Wait 1 second
 
-            // Step 3: Reset round state and start new round
+            // Step 4: Reset round state and start new round
             Plugin.Logger.LogInfo("Step 3: Starting next round...");
             StartNextRound();
         }
@@ -58,22 +67,10 @@ namespace PEAKCompetitive.Util
             Plugin.Logger.LogInfo("Sent kill RPC to all clients");
         }
 
-        private void ReviveAllPlayers()
+        private void ReviveAllPlayersAtPosition(Vector3? teleportPosition)
         {
-            // Get next campfire position for teleportation
-            Vector3? teleportPos = CharacterHelper.GetNextCampfirePosition();
-
-            if (teleportPos.HasValue)
-            {
-                Plugin.Logger.LogInfo($"Next campfire position: {teleportPos.Value}");
-            }
-            else
-            {
-                Plugin.Logger.LogWarning("No campfire found for teleportation!");
-            }
-
             // Send RPC to all clients to revive and teleport their own character
-            NetworkSyncManager.Instance.SyncReviveAllPlayers(teleportPos);
+            NetworkSyncManager.Instance.SyncReviveAllPlayers(teleportPosition);
             Plugin.Logger.LogInfo("Sent revive & teleport RPC to all clients");
         }
 
@@ -87,8 +84,19 @@ namespace PEAKCompetitive.Util
                 team.ResetRoundState();
             }
 
+            // Reset RespawnChest tracking for the new round
+            RespawnChestPatch.ResetChestTracking();
+
+            // Reset campfire detection for all campfires
+            CampfireInteraction.ResetAllDetections();
+
             // Get next map name (biome progression)
             string nextMap = GetNextBiome(matchState.CurrentMapName);
+
+            // Set the target campfire for detection
+            Segment nextSegment = GetNextSegment(matchState.CurrentMapName);
+            CampfireInteraction.SetRoundTarget(nextSegment);
+            Plugin.Logger.LogInfo($"Set round target segment: {nextSegment}");
 
             // Start new round
             matchState.StartRound(nextMap);
@@ -97,6 +105,24 @@ namespace PEAKCompetitive.Util
             NetworkSyncManager.Instance.SyncRoundStart(nextMap);
 
             Plugin.Logger.LogInfo($"New round started: {nextMap}");
+        }
+
+        private Segment GetNextSegment(string currentBiome)
+        {
+            currentBiome = currentBiome?.ToLower() ?? "";
+
+            if (currentBiome.Contains("shore") || currentBiome.Contains("beach") || currentBiome == "")
+                return Segment.Tropics;
+            if (currentBiome.Contains("tropic"))
+                return Segment.Alpine;
+            if (currentBiome.Contains("mesa") || currentBiome.Contains("alpine"))
+                return Segment.Caldera;
+            if (currentBiome.Contains("root") || currentBiome.Contains("caldera"))
+                return Segment.TheKiln;
+            if (currentBiome.Contains("kiln"))
+                return Segment.Peak;
+
+            return Segment.Tropics; // Default
         }
 
         private string GetNextBiome(string currentBiome)

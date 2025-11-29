@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  release:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore src/PEAKCompetitive/PEAKCompetitive.csproj
+
+    - name: Build Release
+      run: dotnet build src/PEAKCompetitive/PEAKCompetitive.csproj --configuration Release --no-restore
+
+    - name: Get version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+
+    - name: Create Release Package
+      run: |
+        New-Item -ItemType Directory -Force -Path release/PEAKCompetitive
+        Copy-Item artifacts/bin/Release/PEAKCompetitive.dll release/PEAKCompetitive/
+        if (Test-Path README.md) { Copy-Item README.md release/PEAKCompetitive/ }
+        Compress-Archive -Path release/PEAKCompetitive -DestinationPath "PEAKCompetitive-${{ steps.version.outputs.VERSION }}.zip"
+      shell: pwsh
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          PEAKCompetitive-${{ steps.version.outputs.VERSION }}.zip
+          artifacts/bin/Release/PEAKCompetitive.dll
+        generate_release_notes: true
+        draft: false
+        prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -8,8 +8,11 @@
     <Version>1.0.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-    <!-- Update this path to your PEAK installation -->
-    <ManagedDir>C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed\</ManagedDir>
+    <!-- PEAK game DLLs location -->
+    <!-- Override with PEAK_MANAGED_DIR environment variable for CI -->
+    <!-- Default: Standard Steam installation path -->
+    <ManagedDir Condition="'$(PEAK_MANAGED_DIR)' != ''">$(PEAK_MANAGED_DIR)</ManagedDir>
+    <ManagedDir Condition="'$(PEAK_MANAGED_DIR)' == ''">C:\Program Files (x86)\Steam\steamapps\common\PEAK\PEAK_Data\Managed\</ManagedDir>
 
     <!-- Output path -->
     <OutputPath>..\..\artifacts\bin\$(Configuration)\</OutputPath>
