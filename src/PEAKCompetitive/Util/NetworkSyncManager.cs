@@ -541,16 +541,27 @@ namespace PEAKCompetitive.Util
         private bool AllTeamsFinished()
         {
             var matchState = MatchState.Instance;
+            int teamsWithPlayers = 0;
+            int teamsFinished = 0;
 
             foreach (var team in matchState.Teams)
             {
-                if (!team.HasReachedSummit)
+                // Skip empty teams
+                if (team.Members.Count == 0)
                 {
-                    return false;
+                    Plugin.Logger.LogInfo($"AllTeamsFinished: {team.TeamName} has no players, skipping");
+                    continue;
+                }
+
+                teamsWithPlayers++;
+                if (team.HasReachedSummit)
+                {
+                    teamsFinished++;
                 }
             }
 
-            return true;
+            Plugin.Logger.LogInfo($"AllTeamsFinished: {teamsFinished}/{teamsWithPlayers} teams finished");
+            return teamsWithPlayers > 0 && teamsFinished == teamsWithPlayers;
         }
     }
 }

@@ -131,11 +131,33 @@ namespace PEAKCompetitive.Patches
                 _usedChestIds.Add(chestId);
                 Plugin.Logger.LogInfo($"RespawnChest: {interactorTeam.TeamName} is first to touch - spawning legendary item!");
 
-                // Call Luggage.SpawnItems to spawn items (RespawnChest inherits from Luggage)
-                var baseMethod = AccessTools.Method(typeof(Luggage), "SpawnItems");
-                __result = (List<PhotonView>)baseMethod.Invoke(__instance, new object[] { spawnSpots });
+                try
+                {
+                    // Directly call the Spawner base class SpawnItems method
+                    // This bypasses the RespawnChest revival logic and just spawns items
+                    var spawnerType = typeof(Spawner);
+                    var spawnMethod = spawnerType.GetMethod("SpawnItems",
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
 
-                Plugin.Logger.LogInfo($"RespawnChest: SpawnItems returned {__result?.Count ?? 0} items");
+                    if (spawnMethod != null)
+                    {
+                        Plugin.Logger.LogInfo($"RespawnChest: Found Spawner.SpawnItems, calling it...");
+                        var result = spawnMethod.Invoke(__instance, new object[] { spawnSpots });
+                        __result = result as List<PhotonView> ?? new List<PhotonView>();
+                        Plugin.Logger.LogInfo($"RespawnChest: Spawner.SpawnItems returned {__result.Count} items");
+                    }
+                    else
+                    {
+                        Plugin.Logger.LogError("RespawnChest: Could not find Spawner.SpawnItems method!");
+                        __result = new List<PhotonView>();
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Plugin.Logger.LogError($"RespawnChest: Exception spawning items: {ex.Message}");
+                    Plugin.Logger.LogError($"RespawnChest: Stack trace: {ex.StackTrace}");
+                    __result = new List<PhotonView>();
+                }
             }
             else
             {
