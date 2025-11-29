@@ -187,7 +187,7 @@ namespace PEAKCompetitive.Configuration
                 "CalderaPoints",
                 2,
                 new ConfigDescription(
-                    "Points for Caldera biome (★★★★★ Very Hard)",
+                    "Points for Caldera biome (★★☆☆☆ Easy)",
                     new AcceptableValueRange<int>(1, 20)
                 )
             );

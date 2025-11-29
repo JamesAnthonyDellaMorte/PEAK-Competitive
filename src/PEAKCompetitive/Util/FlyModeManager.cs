@@ -23,8 +23,8 @@ namespace PEAKCompetitive.Util
 
         public bool IsFlyModeActive { get; private set; } = false;
 
-        private float _flySpeed = 20f;
-        private float _boostMultiplier = 3f;
+        private float _flySpeed = 50f;
+        private float _boostMultiplier = 5f;
         private Character _localCharacter;
 
         // Input System actions (same as game uses)

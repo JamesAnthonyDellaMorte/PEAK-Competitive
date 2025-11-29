@@ -34,21 +34,30 @@ namespace PEAKCompetitive.Patches
         /// </summary>
         static bool Prefix(RespawnChest __instance, List<Transform> spawnSpots, ref List<PhotonView> __result)
         {
+            Plugin.Logger.LogInfo($"=== RESPAWN CHEST PATCH TRIGGERED ===");
+            Plugin.Logger.LogInfo($"CompetitiveMode: {ConfigurationHandler.EnableCompetitiveMode}");
+            Plugin.Logger.LogInfo($"MatchActive: {MatchState.Instance.IsMatchActive}");
+            Plugin.Logger.LogInfo($"IsMasterClient: {PhotonNetwork.IsMasterClient}");
+            Plugin.Logger.LogInfo($"SpawnSpots count: {spawnSpots?.Count ?? 0}");
+
             // If competitive mode is disabled, let original method run
             if (!ConfigurationHandler.EnableCompetitiveMode)
             {
+                Plugin.Logger.LogInfo("Competitive mode disabled - using default behavior");
                 return true;
             }
 
             // If no match is active, let original method run
             if (!MatchState.Instance.IsMatchActive)
             {
+                Plugin.Logger.LogInfo("Match not active - using default behavior");
                 return true;
             }
 
             // Only master client handles this
             if (!PhotonNetwork.IsMasterClient)
             {
+                Plugin.Logger.LogInfo("Not master client - skipping");
                 __result = new List<PhotonView>();
                 return false;
             }

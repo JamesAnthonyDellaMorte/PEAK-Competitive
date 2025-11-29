@@ -476,13 +476,13 @@ namespace PEAKCompetitive.Util
                 matchState.NextArrivalPlacement++; // Increment for next player
 
                 int baseMapPoints = Configuration.ConfigurationHandler.GetMapPoints(matchState.CurrentMapName);
-                float placementMultiplier = GetPlacementMultiplier(playerPlacement);
-                int pointsForThisPlayer = (int)(baseMapPoints * placementMultiplier);
+                int placementMultiplier = GetPlacementMultiplier(playerPlacement);
+                int pointsForThisPlayer = baseMapPoints * placementMultiplier;
 
                 // Award points to team
                 team.Score += pointsForThisPlayer;
                 Plugin.Logger.LogInfo($"=== POINTS AWARDED ===");
-                Plugin.Logger.LogInfo($"Player #{playerPlacement} arrived! {placementMultiplier * 100:F0}% × {baseMapPoints} base = {pointsForThisPlayer} points");
+                Plugin.Logger.LogInfo($"Player #{playerPlacement} arrived! {placementMultiplier}x × {baseMapPoints} base = {pointsForThisPlayer} points");
                 Plugin.Logger.LogInfo($"{team.TeamName} +{pointsForThisPlayer} points! New total: {team.Score}");
             }
             else
@@ -523,15 +523,19 @@ namespace PEAKCompetitive.Util
         }
 
         /// <summary>
-        /// Get point multiplier based on placement
-        /// Each placement loses 25% (a quarter):
-        /// 1st = 100%, 2nd = 75%, 3rd = 50%, 4th = 25%, 5th+ = 0%
-        /// Formula: 1.0 - (0.25 × (placement - 1)), minimum 0
+        /// Get point multiplier based on placement (integer for clean scoring)
+        /// 1st = 4x, 2nd = 3x, 3rd = 2x, 4th = 1x, 5th+ = 0x
         /// </summary>
-        private float GetPlacementMultiplier(int placement)
+        private int GetPlacementMultiplier(int placement)
         {
-            float multiplier = 1.0f - (0.25f * (placement - 1));
-            return Mathf.Max(0f, multiplier);
+            switch (placement)
+            {
+                case 1: return 4;
+                case 2: return 3;
+                case 3: return 2;
+                case 4: return 1;
+                default: return 0;
+            }
         }
 
         private bool AllTeamsFinished()

@@ -26,9 +26,14 @@ namespace PEAKCompetitive.Util
 
         public void StartTransition()
         {
-            if (!PhotonNetwork.IsMasterClient) return;
+            if (!PhotonNetwork.IsMasterClient)
+            {
+                Plugin.Logger.LogWarning("StartTransition called but NOT master client - ignoring");
+                return;
+            }
 
-            Plugin.Logger.LogInfo("Starting round transition: Kill -> Revive -> Next Round");
+            Plugin.Logger.LogInfo("=== STARTING ROUND TRANSITION ===");
+            Plugin.Logger.LogInfo("Sequence: Kill -> Wait 2s -> Revive/Teleport -> Wait 1s -> New Round");
 
             StartCoroutine(TransitionSequence());
         }
@@ -76,9 +81,11 @@ namespace PEAKCompetitive.Util
 
         private void StartNextRound()
         {
+            Plugin.Logger.LogInfo("=== STARTING NEXT ROUND ===");
             var matchState = MatchState.Instance;
 
             // Reset timer for new round (hides until first player reaches campfire)
+            Plugin.Logger.LogInfo("Resetting timer for new round...");
             RoundTimerManager.Instance.ResetForNewRound();
 
             // Reset team round states
