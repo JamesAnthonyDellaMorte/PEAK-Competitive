@@ -30,7 +30,7 @@ jobs:
     - name: Get version from tag
       id: version
       run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $env:GITHUB_OUTPUT
-      shell: pwsh
+      shell: powershell
 
     - name: Create Release Package
       run: |
@@ -38,7 +38,7 @@ jobs:
         Copy-Item artifacts/bin/Release/PEAKCompetitive.dll release/PEAKCompetitive/
         if (Test-Path README.md) { Copy-Item README.md release/PEAKCompetitive/ }
         Compress-Archive -Path release/PEAKCompetitive -DestinationPath "PEAKCompetitive-${{ steps.version.outputs.VERSION }}.zip"
-      shell: pwsh
+      shell: powershell
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1

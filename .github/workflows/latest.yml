@@ -33,7 +33,7 @@ jobs:
         Copy-Item artifacts/bin/Release/PEAKCompetitive.dll release/PEAKCompetitive/
         if (Test-Path README.md) { Copy-Item README.md release/PEAKCompetitive/ }
         Compress-Archive -Path release/PEAKCompetitive -DestinationPath "PEAKCompetitive-latest.zip" -Force
-      shell: pwsh
+      shell: powershell
 
     - name: Upload to "latest" Release
       uses: softprops/action-gh-release@v1
