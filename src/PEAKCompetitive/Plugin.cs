@@ -33,7 +33,9 @@ namespace PEAKCompetitive
 #if DEBUG_MODE
             // Add fly mode manager for testing (F4 to toggle) - DEBUG BUILDS ONLY
             gameObject.AddComponent<Util.FlyModeManager>();
-            Logger.LogWarning("DEBUG MODE ENABLED - Fly mode available (F4)");
+            // Add debug console (F5 to toggle) - DEBUG BUILDS ONLY
+            gameObject.AddComponent<Configuration.DebugConsoleUI>();
+            Logger.LogWarning("DEBUG MODE ENABLED - Fly mode (F4), Debug Console (F5)");
 #endif
 
             // Apply all Harmony patches
@@ -45,6 +47,7 @@ namespace PEAKCompetitive
             Logger.LogInfo("Press F3 to open competitive menu");
 #if DEBUG_MODE
             Logger.LogInfo("Press F4 to toggle fly mode (DEBUG BUILD)");
+            Logger.LogInfo("Press F5 to toggle debug console (DEBUG BUILD)");
 #endif
         }
 
