@@ -4,13 +4,14 @@ using PEAKCompetitive.Model;
 using PEAKCompetitive.Util;
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PEAKCompetitive.Patches
 {
     /// <summary>
     /// Detects when players reach campfires and handles point accumulation.
     /// Uses distance-based detection instead of trigger colliders.
-    /// Only detects campfires that advance to the NEXT segment (not current).
+    /// Only detects the NEXT campfire in progression, not intermediate ones.
     /// </summary>
     [HarmonyPatch(typeof(Campfire), "Awake")]
     public class CampfireAwakePatch
@@ -38,7 +39,7 @@ namespace PEAKCompetitive.Patches
         private const float DETECTION_RADIUS = 10f;
 
         // Grace period after round starts before detection begins (seconds)
-        private const float GRACE_PERIOD = 5f;
+        private const float GRACE_PERIOD = 8f;
 
         // Track which players have already been detected at this campfire (to avoid spam)
         private HashSet<int> _detectedPlayers = new HashSet<int>();
@@ -52,6 +53,53 @@ namespace PEAKCompetitive.Patches
         // Track if we've logged the target campfire info
         private bool _loggedTargetInfo = false;
 
+        // Static: Track which campfire instance is the current round's target
+        private static int _currentRoundTargetCampfireId = -1;
+        private static Segment _currentRoundTargetSegment = Segment.Beach;
+
+        /// <summary>
+        /// Set the target campfire for this round. Called when round starts.
+        /// </summary>
+        public static void SetRoundTarget(Segment targetSegment)
+        {
+            _currentRoundTargetSegment = targetSegment;
+            _currentRoundTargetCampfireId = -1; // Will be set when we find the right campfire
+
+            // Find the campfire that advances to this segment
+            var campfires = FindObjectsByType<Campfire>(FindObjectsSortMode.None);
+            foreach (var cf in campfires)
+            {
+                if (cf.advanceToSegment == targetSegment)
+                {
+                    _currentRoundTargetCampfireId = cf.GetInstanceID();
+                    Plugin.Logger.LogInfo($"[Round Target] Set target campfire ID {_currentRoundTargetCampfireId} advancing to {targetSegment}");
+                    break;
+                }
+            }
+
+            if (_currentRoundTargetCampfireId == -1)
+            {
+                Plugin.Logger.LogWarning($"[Round Target] Could not find campfire advancing to {targetSegment}!");
+            }
+        }
+
+        /// <summary>
+        /// Get the next segment based on current segment
+        /// </summary>
+        public static Segment GetNextSegment(Segment current)
+        {
+            // Progression: Beach -> Tropics -> Alpine -> Caldera -> TheKiln -> Peak
+            switch (current)
+            {
+                case Segment.Beach: return Segment.Tropics;
+                case Segment.Tropics: return Segment.Alpine;
+                case Segment.Alpine: return Segment.Caldera;
+                case Segment.Caldera: return Segment.TheKiln;
+                case Segment.TheKiln: return Segment.Peak;
+                default: return Segment.Peak;
+            }
+        }
+
         private void Start()
         {
             // Set initial grace period
@@ -62,6 +110,7 @@ namespace PEAKCompetitive.Patches
         {
             if (!Configuration.ConfigurationHandler.EnableCompetitiveMode) return;
             if (!MatchState.Instance.IsMatchActive) return;
+            if (!MatchState.Instance.IsRoundActive) return; // Only detect during active rounds
 
             // Update cooldown
             if (_detectionCooldown > 0f)
@@ -85,24 +134,40 @@ namespace PEAKCompetitive.Patches
 
         /// <summary>
         /// Check if this campfire is the one players should be heading to.
-        /// Only campfires that advance BEYOND the current segment are valid targets.
+        /// STRICT: Only the campfire that advances to EXACTLY the next segment is valid.
         /// </summary>
         private bool IsTargetCampfire()
         {
-            // Get the current segment from the map name
+            // Method 1: Use explicitly set target campfire ID if available
+            if (_currentRoundTargetCampfireId != -1)
+            {
+                bool isTarget = campfire.GetInstanceID() == _currentRoundTargetCampfireId;
+
+                // Log once
+                if (!_loggedTargetInfo && MatchState.Instance.IsRoundActive)
+                {
+                    Plugin.Logger.LogInfo($"[Campfire ID:{campfire.GetInstanceID()}] Target: {_currentRoundTargetCampfireId}, IsTarget: {isTarget}");
+                    _loggedTargetInfo = true;
+                }
+
+                return isTarget;
+            }
+
+            // Method 2: Fallback - use segment-based detection
             Segment currentSegment = GetCurrentSegment();
+            Segment expectedNextSegment = GetNextSegment(currentSegment);
             Segment campfireAdvancesTo = campfire.advanceToSegment;
 
             // Log target info once per campfire
-            if (!_loggedTargetInfo && MatchState.Instance.IsMatchActive)
+            if (!_loggedTargetInfo && MatchState.Instance.IsRoundActive)
             {
-                Plugin.Logger.LogInfo($"[Campfire] Current segment: {currentSegment}, This campfire advances to: {campfireAdvancesTo}");
+                Plugin.Logger.LogInfo($"[Campfire] Current: {currentSegment}, Expected Next: {expectedNextSegment}, This advances to: {campfireAdvancesTo}");
                 _loggedTargetInfo = true;
             }
 
-            // The campfire is a valid target if it advances to a segment AFTER the current one
-            // Segment enum: Beach=0, Tropics=1, Alpine=2, Caldera=3, TheKiln=4, Peak=5
-            return (int)campfireAdvancesTo > (int)currentSegment;
+            // STRICT: Only match if this campfire advances to EXACTLY the next segment
+            // Not just any segment that's higher
+            return campfireAdvancesTo == expectedNextSegment;
         }
 
         /// <summary>
@@ -112,14 +177,18 @@ namespace PEAKCompetitive.Patches
         {
             string mapName = MatchState.Instance.CurrentMapName?.ToLower() ?? "";
 
-            // Map names to segments
-            if (mapName.Contains("shore") || mapName.Contains("beach"))
+            // Map names to segments - be more specific
+            if (mapName.Contains("shore") || mapName.Contains("beach") || mapName == "")
                 return Segment.Beach;
             if (mapName.Contains("tropic"))
                 return Segment.Tropics;
-            if (mapName.Contains("mesa") || mapName.Contains("alpine"))
+            if (mapName.Contains("mesa"))
+                return Segment.Alpine; // Mesa is part of Alpine in PEAK
+            if (mapName.Contains("alpine"))
                 return Segment.Alpine;
-            if (mapName.Contains("root") || mapName.Contains("caldera"))
+            if (mapName.Contains("root"))
+                return Segment.Caldera; // Roots is part of Caldera
+            if (mapName.Contains("caldera"))
                 return Segment.Caldera;
             if (mapName.Contains("kiln"))
                 return Segment.TheKiln;

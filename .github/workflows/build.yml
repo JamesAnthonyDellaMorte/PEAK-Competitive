@@ -1,0 +1,47 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, multiplayer-mod ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore src/PEAKCompetitive/PEAKCompetitive.csproj
+
+    - name: Build Release
+      run: dotnet build src/PEAKCompetitive/PEAKCompetitive.csproj --configuration Release --no-restore
+
+    - name: Upload Release Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PEAKCompetitive-Release
+        path: artifacts/bin/Release/PEAKCompetitive.dll
+        if-no-files-found: error
+
+    - name: Build Debug
+      run: dotnet build src/PEAKCompetitive/PEAKCompetitive.csproj --configuration Debug --no-restore
+
+    - name: Upload Debug Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PEAKCompetitive-Debug
+        path: artifacts/bin/Debug/PEAKCompetitive.dll
+        if-no-files-found: error

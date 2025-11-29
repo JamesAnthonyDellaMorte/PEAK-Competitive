@@ -149,6 +149,52 @@ dotnet clean && dotnet restore && dotnet build --configuration Release
 - **Debug DLL:** `artifacts/bin/Debug/PEAKCompetitive.dll`
 - **PDB:** Debug symbols included for debugging
 
+## GitHub Actions CI
+
+The project includes GitHub Actions workflows for automated building.
+
+### Workflows
+
+| Workflow | Trigger | Description |
+|----------|---------|-------------|
+| `build.yml` | Push to main/multiplayer-mod, PRs | Builds Release and Debug artifacts |
+| `release.yml` | Push tag `v*` | Creates GitHub Release with artifacts |
+
+### Setup Options
+
+The CI requires PEAK game DLLs to compile. Choose one option:
+
+#### Option 1: Self-Hosted Runner (Recommended)
+1. Set up a [self-hosted runner](https://docs.github.com/en/actions/hosting-your-own-runners) on a machine with PEAK installed
+2. Add repository variable: `USE_SELF_HOSTED` = `true`
+3. The runner will use the local game installation
+
+#### Option 2: Upload Game DLLs
+1. Create a ZIP of required DLLs from `PEAK_Data/Managed/`:
+   - `Assembly-CSharp.dll`
+   - `Photon*.dll`
+   - `Unity*.dll` (Unity modules)
+2. Either:
+   - Host the ZIP publicly and add variable: `GAME_DLLS_URL` = `<url>`
+   - Or base64 encode and add secret: `GAME_DLLS_BASE64`
+
+### Environment Variable Override
+
+For local builds with non-standard PEAK installation:
+```bash
+# Override game DLL location
+set PEAK_MANAGED_DIR=D:\Games\PEAK\PEAK_Data\Managed\
+dotnet build --configuration Release
+```
+
+### Creating a Release
+
+```bash
+# Tag and push to trigger release workflow
+git tag v1.0.0
+git push origin v1.0.0
+```
+
 ## Installation
 
 1. Copy `PEAKCompetitive.dll` to `PEAK/BepInEx/plugins/PEAKCompetitive/`

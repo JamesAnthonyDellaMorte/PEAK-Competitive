@@ -109,7 +109,8 @@ namespace PEAKCompetitive.Util
         }
 
         /// <summary>
-        /// Revive a character (restore to alive state)
+        /// Revive a character (restore to alive state, including ghosts)
+        /// Uses the game's RPCA_Revive RPC to properly reset dead/ghost state
         /// </summary>
         public static void ReviveCharacter(Character character)
         {
@@ -117,28 +118,69 @@ namespace PEAKCompetitive.Util
 
             try
             {
-                // Clear all negative statuses
-                if (character.refs?.afflictions != null)
-                {
-                    character.refs.afflictions.ClearAllStatus(false);
-                    Plugin.Logger.LogInfo($"Cleared all statuses for character");
-                }
-
-                // If we found a revive method via reflection, call it
-                if (_reviveMethod != null)
-                {
-                    _reviveMethod.Invoke(character, null);
-                    Plugin.Logger.LogInfo($"Called {_reviveMethod.Name} on character");
-                }
+                // Use the game's built-in RPCA_Revive RPC for proper ghost revival
+                // This sets dead=false, passedOut=false, fullyPassedOut=false
+                // and clears all status, thorns, and afflictions
+                character.view.RPC("RPCA_Revive", Photon.Pun.RpcTarget.All, new object[] { false });
+                Plugin.Logger.LogInfo($"Called RPCA_Revive on character (ghost will be fully revived)");
             }
             catch (Exception ex)
             {
                 Plugin.Logger.LogError($"Failed to revive character: {ex.Message}");
+
+                // Fallback: try clearing statuses manually
+                try
+                {
+                    if (character.refs?.afflictions != null)
+                    {
+                        character.refs.afflictions.ClearAllStatus(false);
+                        character.refs.afflictions.ClearAllAfflictions();
+                    }
+                    character.data.dead = false;
+                    character.data.passedOut = false;
+                    character.data.fullyPassedOut = false;
+                    Plugin.Logger.LogInfo("Used fallback revive method");
+                }
+                catch (Exception ex2)
+                {
+                    Plugin.Logger.LogError($"Fallback revive also failed: {ex2.Message}");
+                }
             }
         }
 
         /// <summary>
-        /// Teleport character to a position
+        /// Revive a character AT a specific position using the game's built-in RPC.
+        /// This is the proper way to revive and teleport - used by RespawnChest.
+        /// </summary>
+        public static void ReviveCharacterAtPosition(Character character, Vector3 position)
+        {
+            if (character == null) return;
+
+            try
+            {
+                // Use the game's RPCA_ReviveAtPosition RPC
+                // This properly handles both revival AND positioning in multiplayer
+                // Second parameter is 'poof' (visual effect)
+                character.photonView.RPC("RPCA_ReviveAtPosition", Photon.Pun.RpcTarget.All, new object[]
+                {
+                    position + Vector3.up * 2f, // Slight offset above ground to prevent clipping
+                    true // poof effect
+                });
+                Plugin.Logger.LogInfo($"Called RPCA_ReviveAtPosition to {position} for character");
+            }
+            catch (Exception ex)
+            {
+                Plugin.Logger.LogError($"Failed to revive character at position: {ex.Message}");
+
+                // Fallback: revive then teleport separately
+                ReviveCharacter(character);
+                TeleportCharacter(character, position);
+            }
+        }
+
+        /// <summary>
+        /// Teleport character to a position (fallback method)
+        /// NOTE: Prefer ReviveCharacterAtPosition for multiplayer scenarios
         /// </summary>
         public static void TeleportCharacter(Character character, Vector3 position)
         {
@@ -146,18 +188,24 @@ namespace PEAKCompetitive.Util
 
             try
             {
-                // Direct transform manipulation
+                // Try using the game's WarpPlayer method if available
+                // This is more reliable than direct transform manipulation
+                var warpMethod = typeof(Character).GetMethod("WarpPlayer",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                if (warpMethod != null)
+                {
+                    warpMethod.Invoke(character, new object[] { position, true });
+                    Plugin.Logger.LogInfo($"Used WarpPlayer to teleport to {position}");
+                    return;
+                }
+
+                // Fallback: Direct transform manipulation
+                // This may not sync properly in multiplayer!
                 if (character.transform != null)
                 {
                     character.transform.position = position;
-                    Plugin.Logger.LogInfo($"Teleported character to {position}");
-                }
-
-                // If we found a teleport method, use it instead
-                if (_teleportMethod != null)
-                {
-                    _teleportMethod.Invoke(character, new object[] { position });
-                    Plugin.Logger.LogInfo($"Called {_teleportMethod.Name} on character");
+                    Plugin.Logger.LogWarning($"Used direct transform.position (may not sync properly) to {position}");
                 }
             }
             catch (Exception ex)
@@ -259,8 +307,8 @@ namespace PEAKCompetitive.Util
 
                     if (nextCampfire != null)
                     {
-                        // Return position near the campfire
-                        return nextCampfire.transform.position + Vector3.up * 2f; // Spawn 2m above
+                        // Return position at the campfire (no height offset to avoid falling deaths)
+                        return nextCampfire.transform.position;
                     }
                 }
             }

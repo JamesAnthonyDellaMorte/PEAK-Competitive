@@ -14,6 +14,12 @@ namespace PEAKCompetitive.Model
         public string CurrentMapName { get; set; }
         public TeamData WinningTeam { get; private set; }
 
+        /// <summary>
+        /// Tracks global player arrival order (1st player, 2nd player, etc.)
+        /// Reset at start of each round.
+        /// </summary>
+        public int NextArrivalPlacement { get; set; }
+
         private static MatchState _instance;
 
         public static MatchState Instance
@@ -35,6 +41,7 @@ namespace PEAKCompetitive.Model
             IsRoundActive = false;
             CurrentRound = 0;
             CurrentMapName = "";
+            NextArrivalPlacement = 1;
         }
 
         public void InitializeTeams(int teamCount, int playersPerTeam)
@@ -103,6 +110,7 @@ namespace PEAKCompetitive.Model
             IsRoundActive = true;
             CurrentRound++;
             CurrentMapName = mapName;
+            NextArrivalPlacement = 1; // Reset for new round
 
             foreach (var team in Teams)
             {
@@ -152,9 +160,6 @@ namespace PEAKCompetitive.Model
             IsRoundActive = false;
 
             WinningTeam = GetLeadingTeam();
-
-            // Restore host's original nickname (remove scoreboard from name)
-            Util.NetworkSyncManager.Instance.RestoreOriginalNickname();
 
             if (WinningTeam != null)
             {
@@ -213,9 +218,6 @@ namespace PEAKCompetitive.Model
 
         public void Reset()
         {
-            // Restore host's original nickname
-            Util.NetworkSyncManager.Instance.RestoreOriginalNickname();
-
             Teams.Clear();
             IsMatchActive = false;
             IsRoundActive = false;
