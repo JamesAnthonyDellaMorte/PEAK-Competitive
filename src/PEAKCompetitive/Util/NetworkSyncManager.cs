@@ -271,6 +271,21 @@ namespace PEAKCompetitive.Util
             Plugin.Logger.LogInfo("Synced timer start to all clients");
         }
 
+        // Sync timer stop/reset
+        public void SyncTimerStop()
+        {
+            if (!PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null) return;
+
+            var props = new Hashtable
+            {
+                { PROP_TIMER_ACTIVE, false },
+                { PROP_TIMER_REMAINING, 0f }
+            };
+
+            PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+            Plugin.Logger.LogInfo("Synced timer stop to all clients");
+        }
+
         // Sync round start with map name
         public void SyncRoundStart(string mapName)
         {

@@ -122,9 +122,11 @@ namespace PEAKCompetitive.Patches
                 _usedChestIds.Add(chestId);
                 Plugin.Logger.LogInfo($"RespawnChest: {interactorTeam.TeamName} is first to touch - spawning legendary item!");
 
-                // Call the base Spawner.SpawnItems to spawn items
-                var baseMethod = AccessTools.Method(typeof(Spawner), "SpawnItems");
+                // Call Luggage.SpawnItems to spawn items (RespawnChest inherits from Luggage)
+                var baseMethod = AccessTools.Method(typeof(Luggage), "SpawnItems");
                 __result = (List<PhotonView>)baseMethod.Invoke(__instance, new object[] { spawnSpots });
+
+                Plugin.Logger.LogInfo($"RespawnChest: SpawnItems returned {__result?.Count ?? 0} items");
             }
             else
             {

@@ -97,6 +97,23 @@ namespace PEAKCompetitive.Util
         {
             _timerActive = false;
             _roundTimeRemaining = 0f;
+            Plugin.Logger.LogInfo("Timer stopped");
+        }
+
+        /// <summary>
+        /// Reset timer for a new round - hides the timer until first player reaches campfire
+        /// </summary>
+        public void ResetForNewRound()
+        {
+            _timerActive = false;
+            _roundTimeRemaining = 0f;
+            Plugin.Logger.LogInfo("Timer reset for new round (hidden until first arrival)");
+
+            // Sync to all clients
+            if (PhotonNetwork.IsMasterClient)
+            {
+                NetworkSyncManager.Instance.SyncTimerStop();
+            }
         }
     }
 }

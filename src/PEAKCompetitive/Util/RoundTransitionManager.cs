@@ -78,6 +78,9 @@ namespace PEAKCompetitive.Util
         {
             var matchState = MatchState.Instance;
 
+            // Reset timer for new round (hides until first player reaches campfire)
+            RoundTimerManager.Instance.ResetForNewRound();
+
             // Reset team round states
             foreach (var team in matchState.Teams)
             {
