@@ -108,6 +108,29 @@ namespace PEAKCompetitive.Util
             Plugin.Logger.LogInfo($"Synced scores: {string.Join(";", scoreData)}");
         }
 
+        // Sync just team scores (without reassigning teams)
+        public void SyncTeamScores()
+        {
+            if (!PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null) return;
+
+            var matchState = MatchState.Instance;
+
+            // Serialize scores as "teamId:score;teamId:score"
+            var scoreData = new List<string>();
+            foreach (var team in matchState.Teams)
+            {
+                scoreData.Add($"{team.TeamId}:{team.Score}");
+            }
+
+            var props = new ExitGames.Client.Photon.Hashtable
+            {
+                { PROP_TEAM_SCORES, string.Join(";", scoreData) }
+            };
+
+            PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+            Plugin.Logger.LogInfo($"Synced team scores: {string.Join(";", scoreData)}");
+        }
+
         // Handle room property changes
         public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
         {

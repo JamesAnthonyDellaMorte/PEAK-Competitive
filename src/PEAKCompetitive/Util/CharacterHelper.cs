@@ -291,24 +291,44 @@ namespace PEAKCompetitive.Util
         }
 
         /// <summary>
-        /// Get the next campfire position for teleportation
+        /// Get the next campfire position for teleportation.
+        /// Returns the campfire that matches the NEXT round's starting location.
         /// </summary>
         public static Vector3? GetNextCampfirePosition()
         {
             try
             {
+                // Get the next biome name from current map
+                string currentMap = Model.MatchState.Instance.CurrentMapName ?? "Shore";
+                Segment targetSegment = GetTargetSegmentForMap(currentMap);
+
+                Plugin.Logger.LogInfo($"GetNextCampfirePosition: Current map = {currentMap}, target segment = {targetSegment}");
+
                 // Find all campfires in the scene
                 var campfires = UnityEngine.Object.FindObjectsByType<Campfire>(FindObjectsSortMode.None);
 
                 if (campfires != null && campfires.Length > 0)
                 {
-                    // Get the campfire with the highest segment (next biome)
-                    var nextCampfire = campfires.OrderByDescending(c => c.advanceToSegment).FirstOrDefault();
-
-                    if (nextCampfire != null)
+                    // Find the campfire that advances to the target segment
+                    foreach (var cf in campfires)
                     {
-                        // Return position at the campfire (no height offset to avoid falling deaths)
-                        return nextCampfire.transform.position;
+                        if (cf.advanceToSegment == targetSegment)
+                        {
+                            Plugin.Logger.LogInfo($"Found target campfire at {cf.transform.position} (advances to {targetSegment})");
+                            return cf.transform.position;
+                        }
+                    }
+
+                    // Fallback: if exact match not found, get the next higher one
+                    var fallbackCampfire = campfires
+                        .Where(c => c.advanceToSegment >= targetSegment)
+                        .OrderBy(c => c.advanceToSegment)
+                        .FirstOrDefault();
+
+                    if (fallbackCampfire != null)
+                    {
+                        Plugin.Logger.LogWarning($"Using fallback campfire at {fallbackCampfire.transform.position} (advances to {fallbackCampfire.advanceToSegment})");
+                        return fallbackCampfire.transform.position;
                     }
                 }
             }
@@ -318,6 +338,33 @@ namespace PEAKCompetitive.Util
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Get the target segment (campfire) for a given map name.
+        /// This is the campfire players should be teleported TO after completing a round.
+        /// </summary>
+        private static Segment GetTargetSegmentForMap(string mapName)
+        {
+            mapName = mapName?.ToLower() ?? "";
+
+            // Map names to the segment they should teleport to (which is the next biome's campfire)
+            if (mapName.Contains("shore") || mapName.Contains("beach") || mapName == "")
+                return Segment.Tropics;  // After Shore, go to Tropics campfire
+            if (mapName.Contains("tropic"))
+                return Segment.Alpine;   // After Tropics, go to Alpine campfire
+            if (mapName.Contains("mesa"))
+                return Segment.Alpine;   // Mesa is between Tropics and Alpine
+            if (mapName.Contains("alpine"))
+                return Segment.Caldera;  // After Alpine, go to Caldera campfire
+            if (mapName.Contains("root"))
+                return Segment.Caldera;  // Roots is between Alpine and Caldera
+            if (mapName.Contains("caldera"))
+                return Segment.TheKiln;  // After Caldera, go to Kiln campfire
+            if (mapName.Contains("kiln"))
+                return Segment.Peak;     // After Kiln, go to Peak
+
+            return Segment.Tropics; // Default
         }
     }
 }

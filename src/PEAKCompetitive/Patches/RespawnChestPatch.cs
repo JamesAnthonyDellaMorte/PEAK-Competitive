@@ -20,6 +20,9 @@ namespace PEAKCompetitive.Patches
         // Track which chest has been used (to give legendary to first team only)
         private static HashSet<int> _usedChestIds = new HashSet<int>();
 
+        // Flag to prevent re-entry when we want to run original logic
+        private static bool _allowOriginal = false;
+
         /// <summary>
         /// Reset tracking when a new round starts
         /// </summary>
@@ -34,6 +37,13 @@ namespace PEAKCompetitive.Patches
         /// </summary>
         static bool Prefix(RespawnChest __instance, List<Transform> spawnSpots, ref List<PhotonView> __result)
         {
+            // Check for re-entry (we set this flag when we want original to run)
+            if (_allowOriginal)
+            {
+                Plugin.Logger.LogInfo("RespawnChest: Re-entry detected, letting original run for item spawn");
+                return true;
+            }
+
             Plugin.Logger.LogInfo($"=== RESPAWN CHEST PATCH TRIGGERED ===");
             Plugin.Logger.LogInfo($"CompetitiveMode: {ConfigurationHandler.EnableCompetitiveMode}");
             Plugin.Logger.LogInfo($"MatchActive: {MatchState.Instance.IsMatchActive}");
@@ -86,8 +96,10 @@ namespace PEAKCompetitive.Patches
 
             Plugin.Logger.LogInfo($"RespawnChest: {TeamManager.GetPlayerDisplayName(interactor.view.Owner)} from {interactorTeam.TeamName} interacted");
 
-            // Find dead/passed out TEAMMATES only
+            // Find dead/passed out characters categorized by team
             List<Character> deadTeammates = new List<Character>();
+            List<Character> deadEnemies = new List<Character>();
+
             foreach (Character character in Character.AllCharacters)
             {
                 if (character.data.dead || character.data.fullyPassedOut)
@@ -100,14 +112,23 @@ namespace PEAKCompetitive.Patches
                         {
                             deadTeammates.Add(character);
                         }
+                        else
+                        {
+                            deadEnemies.Add(character);
+                        }
                     }
                 }
             }
+
+            Plugin.Logger.LogInfo($"RespawnChest: Dead teammates: {deadTeammates.Count}, Dead enemies: {deadEnemies.Count}");
 
             // If there are dead teammates, revive them at the chest
             if (deadTeammates.Count > 0 && Ascents.canReviveDead)
             {
                 Plugin.Logger.LogInfo($"RespawnChest: Reviving {deadTeammates.Count} teammates");
+
+                // Remove the skeleton visual
+                __instance.photonView.RPC("RemoveSkeletonRPC", RpcTarget.AllBuffered, System.Array.Empty<object>());
 
                 // Revive ALL dead teammates (same behavior as original but team-filtered)
                 foreach (var teammate in deadTeammates)
@@ -131,32 +152,69 @@ namespace PEAKCompetitive.Patches
                 _usedChestIds.Add(chestId);
                 Plugin.Logger.LogInfo($"RespawnChest: {interactorTeam.TeamName} is first to touch - spawning legendary item!");
 
-                try
+                // Check if any enemies are dead (would trigger vanilla revival logic)
+                if (deadEnemies.Count > 0)
                 {
-                    // Directly call the Spawner base class SpawnItems method
-                    // This bypasses the RespawnChest revival logic and just spawns items
-                    var spawnerType = typeof(Spawner);
-                    var spawnMethod = spawnerType.GetMethod("SpawnItems",
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    Plugin.Logger.LogInfo($"RespawnChest: Enemies are dead but not teammates - forcing item spawn mode");
+                    // We need to spawn items WITHOUT reviving enemies
+                    // Use re-entry flag so original runs but we handle it in Postfix
+                    // Actually, we can just call the base Spawner.SpawnItems directly
 
-                    if (spawnMethod != null)
+                    try
                     {
-                        Plugin.Logger.LogInfo($"RespawnChest: Found Spawner.SpawnItems, calling it...");
-                        var result = spawnMethod.Invoke(__instance, new object[] { spawnSpots });
-                        __result = result as List<PhotonView> ?? new List<PhotonView>();
-                        Plugin.Logger.LogInfo($"RespawnChest: Spawner.SpawnItems returned {__result.Count} items");
+                        // Get the spawn spots from the chest
+                        var getSpotsMethod = typeof(Spawner).GetMethod("GetSpawnSpots",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                        List<Transform> spots = spawnSpots;
+                        if (getSpotsMethod != null)
+                        {
+                            spots = getSpotsMethod.Invoke(__instance, null) as List<Transform> ?? spawnSpots;
+                        }
+
+                        // Use the _allowOriginal flag to bypass our Prefix on re-entry
+                        _allowOriginal = true;
+                        try
+                        {
+                            // Call the original method - our Prefix will see _allowOriginal and let it through
+                            // But we need to make the original think there are no dead players
+                            // Since we can't modify that check, we'll call Spawner.SpawnItems directly
+
+                            // Actually, let's just call ForceSpawn or TrySpawnItems
+                            var forceSpawnMethod = typeof(Spawner).GetMethod("ForceSpawn",
+                                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+
+                            if (forceSpawnMethod != null)
+                            {
+                                Plugin.Logger.LogInfo("RespawnChest: Calling Spawner.ForceSpawn()");
+                                forceSpawnMethod.Invoke(__instance, null);
+                                __result = new List<PhotonView>();
+                            }
+                            else
+                            {
+                                Plugin.Logger.LogError("RespawnChest: Could not find ForceSpawn method");
+                                __result = new List<PhotonView>();
+                            }
+                        }
+                        finally
+                        {
+                            _allowOriginal = false;
+                        }
                     }
-                    else
+                    catch (System.Exception ex)
                     {
-                        Plugin.Logger.LogError("RespawnChest: Could not find Spawner.SpawnItems method!");
+                        Plugin.Logger.LogError($"RespawnChest: Exception spawning items: {ex.Message}");
+                        Plugin.Logger.LogError($"RespawnChest: Stack trace: {ex.StackTrace}");
                         __result = new List<PhotonView>();
+                        _allowOriginal = false;
                     }
                 }
-                catch (System.Exception ex)
+                else
                 {
-                    Plugin.Logger.LogError($"RespawnChest: Exception spawning items: {ex.Message}");
-                    Plugin.Logger.LogError($"RespawnChest: Stack trace: {ex.StackTrace}");
-                    __result = new List<PhotonView>();
+                    Plugin.Logger.LogInfo("RespawnChest: No dead players at all - letting original spawn items");
+                    // No one is dead - original will naturally spawn items (not try to revive)
+                    // Character.PlayerIsDeadOrDown() will return false
+                    return true;
                 }
             }
             else

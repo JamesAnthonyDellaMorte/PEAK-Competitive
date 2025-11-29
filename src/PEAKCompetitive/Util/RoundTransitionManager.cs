@@ -104,9 +104,11 @@ namespace PEAKCompetitive.Util
             string nextMap = GetNextBiome(matchState.CurrentMapName);
 
             // Set the target campfire for detection
-            Segment nextSegment = GetNextSegment(matchState.CurrentMapName);
+            // IMPORTANT: Use nextMap, not CurrentMapName! We're setting the target for the NEW round.
+            // If current is Shore and nextMap is Tropics, target should be Alpine (after Tropics)
+            Segment nextSegment = GetNextSegment(nextMap);
             CampfireInteraction.SetRoundTarget(nextSegment);
-            Plugin.Logger.LogInfo($"Set round target segment: {nextSegment}");
+            Plugin.Logger.LogInfo($"Set round target segment: {nextSegment} (based on new map: {nextMap})");
 
             // Start new round
             matchState.StartRound(nextMap);

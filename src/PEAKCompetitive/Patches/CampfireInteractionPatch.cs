@@ -4,14 +4,208 @@ using PEAKCompetitive.Model;
 using PEAKCompetitive.Util;
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace PEAKCompetitive.Patches
 {
     /// <summary>
-    /// Detects when players reach campfires and handles point accumulation.
-    /// Uses distance-based detection instead of trigger colliders.
-    /// Only detects the NEXT campfire in progression, not intermediate ones.
+    /// Detects when campfires are LIT (not just approached).
+    /// This hooks into the actual campfire lighting event, which only fires
+    /// when the vanilla game confirms all players are in range.
+    /// </summary>
+    [HarmonyPatch(typeof(Campfire), "Light_Rpc")]
+    public class CampfireLightPatch
+    {
+        // Track which campfires have been lit this round (to prevent double-triggering)
+        private static HashSet<int> _litCampfiresThisRound = new HashSet<int>();
+
+        // Track the target segment for this round
+        private static Segment _targetSegment = Segment.Tropics;
+
+        /// <summary>
+        /// Set the target segment for this round
+        /// </summary>
+        public static void SetTargetSegment(Segment segment)
+        {
+            _targetSegment = segment;
+            Plugin.Logger.LogInfo($"[Campfire] Target segment set to: {segment}");
+        }
+
+        /// <summary>
+        /// Reset for new round
+        /// </summary>
+        public static void ResetForNewRound()
+        {
+            _litCampfiresThisRound.Clear();
+            Plugin.Logger.LogInfo("[Campfire] Reset lit campfires tracking for new round");
+        }
+
+        /// <summary>
+        /// Called when ANY campfire is lit via RPC
+        /// </summary>
+        static void Postfix(Campfire __instance)
+        {
+            // Only process in competitive mode with active match
+            if (!Configuration.ConfigurationHandler.EnableCompetitiveMode) return;
+            if (!MatchState.Instance.IsMatchActive) return;
+            if (!MatchState.Instance.IsRoundActive) return;
+
+            // Only master client processes scoring/transitions
+            if (!PhotonNetwork.IsMasterClient) return;
+
+            int campfireId = __instance.GetInstanceID();
+
+            // Check if we already processed this campfire this round
+            if (_litCampfiresThisRound.Contains(campfireId))
+            {
+                Plugin.Logger.LogInfo($"[Campfire] Already processed campfire {campfireId} this round");
+                return;
+            }
+
+            // Check if this campfire advances to the target segment
+            if (__instance.advanceToSegment != _targetSegment)
+            {
+                Plugin.Logger.LogInfo($"[Campfire] Lit campfire advances to {__instance.advanceToSegment}, but target is {_targetSegment} - ignoring");
+                return;
+            }
+
+            // This is the target campfire and it was just lit!
+            _litCampfiresThisRound.Add(campfireId);
+
+            Plugin.Logger.LogInfo($"");
+            Plugin.Logger.LogInfo($"========================================");
+            Plugin.Logger.LogInfo($"=== TARGET CAMPFIRE LIT! ===");
+            Plugin.Logger.LogInfo($"========================================");
+            Plugin.Logger.LogInfo($"Campfire advances to: {__instance.advanceToSegment}");
+            Plugin.Logger.LogInfo($"Position: {__instance.transform.position}");
+
+            // Award points to all players who are nearby (within vanilla's 15m range)
+            ProcessCampfireCompletion(__instance);
+        }
+
+        /// <summary>
+        /// Process the campfire completion - award points and trigger round transition
+        /// </summary>
+        private static void ProcessCampfireCompletion(Campfire campfire)
+        {
+            Vector3 campfirePos = campfire.transform.position;
+            float detectionRange = 20f; // Slightly larger than vanilla's 15m to be safe
+
+            // Find all players near the campfire and award points by team
+            Dictionary<int, List<Photon.Realtime.Player>> teamPlayers = new Dictionary<int, List<Photon.Realtime.Player>>();
+            Dictionary<int, int> teamNonGhostCount = new Dictionary<int, int>();
+
+            foreach (var character in Character.AllCharacters)
+            {
+                if (character == null || character.view == null) continue;
+
+                var owner = character.view.Owner;
+                if (owner == null) continue;
+
+                // Check if player is near campfire
+                float distance = Vector3.Distance(character.Center, campfirePos);
+                if (distance > detectionRange) continue;
+
+                // Get player's team
+                var team = TeamManager.GetPlayerTeam(owner);
+                if (team == null) continue;
+
+                // Track player by team
+                if (!teamPlayers.ContainsKey(team.TeamId))
+                {
+                    teamPlayers[team.TeamId] = new List<Photon.Realtime.Player>();
+                    teamNonGhostCount[team.TeamId] = 0;
+                }
+
+                teamPlayers[team.TeamId].Add(owner);
+
+                // Count non-ghosts
+                if (!character.IsGhost)
+                {
+                    teamNonGhostCount[team.TeamId]++;
+                }
+
+                Plugin.Logger.LogInfo($"[Campfire] Player {TeamManager.GetPlayerDisplayName(owner)} from {team.TeamName} at campfire (ghost: {character.IsGhost})");
+            }
+
+            // Award points to each team based on their non-ghost members
+            int placement = 1;
+            foreach (var teamId in teamPlayers.Keys)
+            {
+                var team = MatchState.Instance.Teams.Find(t => t.TeamId == teamId);
+                if (team == null) continue;
+
+                int nonGhostCount = teamNonGhostCount[teamId];
+                if (nonGhostCount == 0)
+                {
+                    Plugin.Logger.LogInfo($"[Campfire] {team.TeamName} has no living members - no points");
+                    continue;
+                }
+
+                // Calculate points: placement multiplier × base points × living members
+                int basePoints = Configuration.ConfigurationHandler.GetMapPoints(MatchState.Instance.CurrentMapName);
+                int multiplier = GetPlacementMultiplier(placement);
+                int points = multiplier * basePoints * nonGhostCount;
+
+                team.AddScore(points);
+                team.HasReachedSummit = true;
+
+                Plugin.Logger.LogInfo($"=== POINTS AWARDED ===");
+                Plugin.Logger.LogInfo($"{team.TeamName}: {multiplier}x × {basePoints} base × {nonGhostCount} alive = {points} points");
+                Plugin.Logger.LogInfo($"{team.TeamName} new total: {team.Score}");
+
+                placement++;
+            }
+
+            // Sync scores to all clients
+            NetworkSyncManager.Instance.SyncTeamScores();
+
+            // Start the round timer (gives other teams time to catch up if they weren't all there)
+            if (!RoundTimerManager.Instance.IsTimerActive)
+            {
+                Plugin.Logger.LogInfo("[Campfire] Starting 10-minute round timer");
+                RoundTimerManager.Instance.StartTimer();
+                NetworkSyncManager.Instance.SyncTimerStart();
+            }
+
+            // Check if all teams have finished
+            if (AllTeamsFinished())
+            {
+                Plugin.Logger.LogInfo("[Campfire] All teams finished! Starting round transition...");
+                RoundTimerManager.Instance.StopTimer();
+                RoundTransitionManager.Instance.StartTransition();
+            }
+        }
+
+        private static int GetPlacementMultiplier(int placement)
+        {
+            switch (placement)
+            {
+                case 1: return 4;
+                case 2: return 3;
+                case 3: return 2;
+                default: return 1;
+            }
+        }
+
+        private static bool AllTeamsFinished()
+        {
+            int teamsWithPlayers = 0;
+            int teamsFinished = 0;
+
+            foreach (var team in MatchState.Instance.Teams)
+            {
+                if (team.Members.Count == 0) continue;
+                teamsWithPlayers++;
+                if (team.HasReachedSummit)
+                    teamsFinished++;
+            }
+
+            return teamsWithPlayers > 0 && teamsFinished == teamsWithPlayers;
+        }
+    }
+
+    /// <summary>
+    /// Legacy patch for campfire awake - just logs campfire detection
     /// </summary>
     [HarmonyPatch(typeof(Campfire), "Awake")]
     public class CampfireAwakePatch
@@ -19,367 +213,29 @@ namespace PEAKCompetitive.Patches
         static void Postfix(Campfire __instance)
         {
             if (!Configuration.ConfigurationHandler.EnableCompetitiveMode) return;
-
             Plugin.Logger.LogInfo($"Campfire detected! AdvancesTo: {__instance.advanceToSegment}, Position: {__instance.transform.position}");
-
-            // Add interaction component to campfire
-            var interaction = __instance.gameObject.AddComponent<CampfireInteraction>();
-            interaction.campfire = __instance;
         }
     }
 
     /// <summary>
-    /// Handles campfire interaction logic using distance-based detection
+    /// Static helper class for campfire management
     /// </summary>
-    public class CampfireInteraction : MonoBehaviour
+    public static class CampfireInteraction
     {
-        public Campfire campfire;
-
-        // Detection radius - how close player needs to be to trigger arrival
-        private const float DETECTION_RADIUS = 10f;
-
-        // Grace period after round starts before detection begins (seconds)
-        private const float GRACE_PERIOD = 8f;
-
-        // Track which players have already been detected at this campfire (to avoid spam)
-        private HashSet<int> _detectedPlayers = new HashSet<int>();
-
-        // Cooldown to prevent rapid re-detection
-        private float _detectionCooldown = 0f;
-
-        // Time when this campfire became valid for detection
-        private float _validDetectionTime = 0f;
-
-        // Track if we've logged the target campfire info
-        private bool _loggedTargetInfo = false;
-
-        // Static: Track which campfire instance is the current round's target
-        private static int _currentRoundTargetCampfireId = -1;
-        private static Segment _currentRoundTargetSegment = Segment.Beach;
-
         /// <summary>
-        /// Set the target campfire for this round. Called when round starts.
+        /// Set the target segment for this round (called by RoundTransitionManager)
         /// </summary>
         public static void SetRoundTarget(Segment targetSegment)
         {
-            _currentRoundTargetSegment = targetSegment;
-            _currentRoundTargetCampfireId = -1; // Will be set when we find the right campfire
-
-            // Find the campfire that advances to this segment
-            var campfires = FindObjectsByType<Campfire>(FindObjectsSortMode.None);
-            foreach (var cf in campfires)
-            {
-                if (cf.advanceToSegment == targetSegment)
-                {
-                    _currentRoundTargetCampfireId = cf.GetInstanceID();
-                    Plugin.Logger.LogInfo($"[Round Target] Set target campfire ID {_currentRoundTargetCampfireId} advancing to {targetSegment}");
-                    break;
-                }
-            }
-
-            if (_currentRoundTargetCampfireId == -1)
-            {
-                Plugin.Logger.LogWarning($"[Round Target] Could not find campfire advancing to {targetSegment}!");
-            }
+            CampfireLightPatch.SetTargetSegment(targetSegment);
         }
 
         /// <summary>
-        /// Get the next segment based on current segment
-        /// </summary>
-        public static Segment GetNextSegment(Segment current)
-        {
-            // Progression: Beach -> Tropics -> Alpine -> Caldera -> TheKiln -> Peak
-            switch (current)
-            {
-                case Segment.Beach: return Segment.Tropics;
-                case Segment.Tropics: return Segment.Alpine;
-                case Segment.Alpine: return Segment.Caldera;
-                case Segment.Caldera: return Segment.TheKiln;
-                case Segment.TheKiln: return Segment.Peak;
-                default: return Segment.Peak;
-            }
-        }
-
-        private void Start()
-        {
-            // Set initial grace period
-            _validDetectionTime = Time.time + GRACE_PERIOD;
-        }
-
-        private void Update()
-        {
-            if (!Configuration.ConfigurationHandler.EnableCompetitiveMode) return;
-            if (!MatchState.Instance.IsMatchActive) return;
-            if (!MatchState.Instance.IsRoundActive) return; // Only detect during active rounds
-
-            // Update cooldown
-            if (_detectionCooldown > 0f)
-            {
-                _detectionCooldown -= Time.deltaTime;
-                return;
-            }
-
-            // Check grace period
-            if (Time.time < _validDetectionTime) return;
-
-            // Check if this campfire is the target (advances to next segment)
-            if (!IsTargetCampfire())
-            {
-                return;
-            }
-
-            // Check if local player is near this campfire
-            CheckLocalPlayerProximity();
-        }
-
-        /// <summary>
-        /// Check if this campfire is the one players should be heading to.
-        /// STRICT: Only the campfire that advances to EXACTLY the next segment is valid.
-        /// </summary>
-        private bool IsTargetCampfire()
-        {
-            // Method 1: Use explicitly set target campfire ID if available
-            if (_currentRoundTargetCampfireId != -1)
-            {
-                bool isTarget = campfire.GetInstanceID() == _currentRoundTargetCampfireId;
-
-                // Log once
-                if (!_loggedTargetInfo && MatchState.Instance.IsRoundActive)
-                {
-                    Plugin.Logger.LogInfo($"[Campfire ID:{campfire.GetInstanceID()}] Target: {_currentRoundTargetCampfireId}, IsTarget: {isTarget}");
-                    _loggedTargetInfo = true;
-                }
-
-                return isTarget;
-            }
-
-            // Method 2: Fallback - use segment-based detection
-            Segment currentSegment = GetCurrentSegment();
-            Segment expectedNextSegment = GetNextSegment(currentSegment);
-            Segment campfireAdvancesTo = campfire.advanceToSegment;
-
-            // Log target info once per campfire
-            if (!_loggedTargetInfo && MatchState.Instance.IsRoundActive)
-            {
-                Plugin.Logger.LogInfo($"[Campfire] Current: {currentSegment}, Expected Next: {expectedNextSegment}, This advances to: {campfireAdvancesTo}");
-                _loggedTargetInfo = true;
-            }
-
-            // STRICT: Only match if this campfire advances to EXACTLY the next segment
-            // Not just any segment that's higher
-            return campfireAdvancesTo == expectedNextSegment;
-        }
-
-        /// <summary>
-        /// Get the current segment based on the match state's current map name
-        /// </summary>
-        private Segment GetCurrentSegment()
-        {
-            string mapName = MatchState.Instance.CurrentMapName?.ToLower() ?? "";
-
-            // Map names to segments - be more specific
-            if (mapName.Contains("shore") || mapName.Contains("beach") || mapName == "")
-                return Segment.Beach;
-            if (mapName.Contains("tropic"))
-                return Segment.Tropics;
-            if (mapName.Contains("mesa"))
-                return Segment.Alpine; // Mesa is part of Alpine in PEAK
-            if (mapName.Contains("alpine"))
-                return Segment.Alpine;
-            if (mapName.Contains("root"))
-                return Segment.Caldera; // Roots is part of Caldera
-            if (mapName.Contains("caldera"))
-                return Segment.Caldera;
-            if (mapName.Contains("kiln"))
-                return Segment.TheKiln;
-            if (mapName.Contains("peak") || mapName.Contains("summit"))
-                return Segment.Peak;
-
-            // Default to Beach (start)
-            return Segment.Beach;
-        }
-
-        private void CheckLocalPlayerProximity()
-        {
-            // If we're the host, check ALL players (since only host has the mod)
-            // If we're not the host, just check local player
-            if (PhotonNetwork.IsMasterClient)
-            {
-                CheckAllPlayersProximity();
-            }
-            else
-            {
-                CheckSinglePlayerProximity();
-            }
-        }
-
-        /// <summary>
-        /// Host-only: Check all players in the game for campfire proximity
-        /// </summary>
-        private void CheckAllPlayersProximity()
-        {
-            Vector3 campfirePos = campfire.transform.position;
-
-            // Iterate through ALL characters in the game
-            foreach (var character in Character.AllCharacters)
-            {
-                if (character == null || character.view == null) continue;
-
-                // Get the Photon player who owns this character
-                var owner = character.view.Owner;
-                if (owner == null) continue;
-
-                // Skip if already detected at this campfire
-                if (_detectedPlayers.Contains(owner.ActorNumber)) continue;
-
-                // Calculate distance
-                Vector3 playerPos = character.Center;
-                float distance = Vector3.Distance(playerPos, campfirePos);
-
-                // Check if within detection radius
-                if (distance <= DETECTION_RADIUS)
-                {
-                    Plugin.Logger.LogInfo($"[Host Detection] Player {owner.ActorNumber} reached campfire! Distance: {distance:F1}m");
-                    OnPlayerReachedCampfireHostDetected(owner, character);
-                }
-            }
-
-            // Debug log occasionally (every 5 seconds)
-            if (Time.frameCount % 300 == 0)
-            {
-                int playerCount = Character.AllCharacters?.Count ?? 0;
-                Plugin.Logger.LogInfo($"[Host Campfire Check] Monitoring {playerCount} players for {campfire.advanceToSegment} campfire");
-            }
-        }
-
-        /// <summary>
-        /// Non-host: Only check local player (fallback if non-host also has mod)
-        /// </summary>
-        private void CheckSinglePlayerProximity()
-        {
-            // Get local character using CharacterHelper
-            var localCharacter = CharacterHelper.GetLocalCharacter();
-            if (localCharacter == null) return;
-
-            // Get local player
-            var localPlayer = PhotonNetwork.LocalPlayer;
-            if (localPlayer == null) return;
-
-            // Skip if already detected at this campfire
-            if (_detectedPlayers.Contains(localPlayer.ActorNumber)) return;
-
-            // Calculate distance to campfire
-            Vector3 playerPos = localCharacter.Center;
-            Vector3 campfirePos = campfire.transform.position;
-            float distance = Vector3.Distance(playerPos, campfirePos);
-
-            // Debug log occasionally (every 5 seconds)
-            if (Time.frameCount % 300 == 0)
-            {
-                Plugin.Logger.LogInfo($"[Campfire Check] Distance: {distance:F1}m to {campfire.advanceToSegment} campfire, Radius: {DETECTION_RADIUS}m");
-            }
-
-            // Check if within detection radius
-            if (distance <= DETECTION_RADIUS)
-            {
-                OnPlayerReachedCampfire(localPlayer, localCharacter);
-            }
-        }
-
-        /// <summary>
-        /// Called when host detects ANY player reaching the campfire (host-only detection)
-        /// Since we're the host, we process directly instead of sending RPC
-        /// </summary>
-        private void OnPlayerReachedCampfireHostDetected(Photon.Realtime.Player player, Character character)
-        {
-            // Mark as detected to avoid spam
-            _detectedPlayers.Add(player.ActorNumber);
-
-            // Check if player is a ghost
-            bool isGhost = character.IsGhost;
-
-            Plugin.Logger.LogInfo($"");
-            Plugin.Logger.LogInfo($"========================================");
-            Plugin.Logger.LogInfo($"=== HOST DETECTED CAMPFIRE ARRIVAL ===");
-            Plugin.Logger.LogInfo($"========================================");
-            Plugin.Logger.LogInfo($"Player: {TeamManager.GetPlayerDisplayName(player)} (Actor {player.ActorNumber})");
-            Plugin.Logger.LogInfo($"Campfire advances to: {campfire.advanceToSegment}");
-            Plugin.Logger.LogInfo($"Is Ghost: {isGhost}");
-
-            // Get player's team
-            var team = TeamManager.GetPlayerTeam(player);
-            if (team == null)
-            {
-                Plugin.Logger.LogWarning($"Player {player.ActorNumber} not assigned to any team!");
-                return;
-            }
-
-            Plugin.Logger.LogInfo($"Team: {team.TeamName} (ID: {team.TeamId})");
-
-            // Since we ARE the host, call the RPC handler directly (simulates receiving RPC)
-            Plugin.Logger.LogInfo($"Processing arrival directly (we are host)...");
-            NetworkSyncManager.Instance.ProcessCampfireArrival(player.ActorNumber, team.TeamId, isGhost);
-        }
-
-        /// <summary>
-        /// Called when non-host player detects themselves reaching campfire
-        /// Sends RPC to host for processing
-        /// </summary>
-        private void OnPlayerReachedCampfire(Photon.Realtime.Player player, Character character)
-        {
-            // Mark as detected to avoid spam
-            _detectedPlayers.Add(player.ActorNumber);
-            _detectionCooldown = 2f; // 2 second cooldown
-
-            // Check if player is a ghost
-            bool isGhost = character.IsGhost;
-
-            Plugin.Logger.LogInfo($"");
-            Plugin.Logger.LogInfo($"========================================");
-            Plugin.Logger.LogInfo($"=== CAMPFIRE ARRIVAL DETECTED ===");
-            Plugin.Logger.LogInfo($"========================================");
-            Plugin.Logger.LogInfo($"Player: {TeamManager.GetPlayerDisplayName(player)} (Actor {player.ActorNumber})");
-            Plugin.Logger.LogInfo($"Campfire advances to: {campfire.advanceToSegment}");
-            Plugin.Logger.LogInfo($"Is Ghost: {isGhost}");
-
-            // Get player's team
-            var team = TeamManager.GetPlayerTeam(player);
-            if (team == null)
-            {
-                Plugin.Logger.LogWarning($"Player {player.ActorNumber} not assigned to any team!");
-                return;
-            }
-
-            Plugin.Logger.LogInfo($"Team: {team.TeamName} (ID: {team.TeamId})");
-
-            // Notify the host about this arrival
-            Plugin.Logger.LogInfo($"Sending arrival notification to host...");
-            NetworkSyncManager.Instance.NotifyHostOfCampfireArrival(player.ActorNumber, team.TeamId, isGhost);
-        }
-
-        /// <summary>
-        /// Reset detection state (call when starting a new round)
-        /// </summary>
-        public void ResetDetection()
-        {
-            _detectedPlayers.Clear();
-            _detectionCooldown = 0f;
-            _validDetectionTime = Time.time + GRACE_PERIOD;
-            _loggedTargetInfo = false;
-            Plugin.Logger.LogInfo($"Campfire detection reset for {campfire.advanceToSegment} campfire (grace period: {GRACE_PERIOD}s)");
-        }
-
-        /// <summary>
-        /// Static method to reset all campfire detections
+        /// Reset all detections for new round
         /// </summary>
         public static void ResetAllDetections()
         {
-            var interactions = FindObjectsByType<CampfireInteraction>(FindObjectsSortMode.None);
-            foreach (var interaction in interactions)
-            {
-                interaction.ResetDetection();
-            }
-            Plugin.Logger.LogInfo($"Reset detection for {interactions.Length} campfires");
+            CampfireLightPatch.ResetForNewRound();
         }
     }
 }
