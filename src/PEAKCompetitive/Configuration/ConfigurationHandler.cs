@@ -14,6 +14,7 @@ namespace PEAKCompetitive.Configuration
         // Team Settings
         public static int MaxTeams { get; private set; }
         public static int PlayersPerTeam { get; private set; }
+        public static bool FreeForAllMode { get; set; }  // Each player is their own team
 
         // Match Settings
         public static bool ItemsPersist { get; set; }
@@ -29,6 +30,10 @@ namespace PEAKCompetitive.Configuration
         public static int RootsPoints { get; set; }      // ★★★★☆ Hard
         public static int CalderaPoints { get; set; }    // ★★★★★ Very Hard
         public static int KilnPoints { get; set; }       // ★★★★★+ Extreme
+
+        // PvP Settings (multiplayer-mod branch - requires all players to have mod)
+        public static bool EnablePvP { get; set; }  // Push enemies instead of pulling them up
+        public static float PushForce { get; set; } // How hard to push enemy players
 
         // Debug
         public static bool EnableDebugLogging { get; private set; }
@@ -76,6 +81,14 @@ namespace PEAKCompetitive.Configuration
                 )
             );
             PlayersPerTeam = playersPerTeamEntry.Value;
+
+            var freeForAllEntry = config.Bind(
+                "Teams",
+                "FreeForAllMode",
+                false,
+                "Free-for-all mode - each player is their own team (ignores MaxTeams/PlayersPerTeam)"
+            );
+            FreeForAllMode = freeForAllEntry.Value;
 
             // Match Settings
             var itemsPersistEntry = config.Bind(
@@ -128,7 +141,7 @@ namespace PEAKCompetitive.Configuration
             var tropicsPointsEntry = config.Bind(
                 "BiomePoints",
                 "TropicsPoints",
-                2,
+                3,
                 new ConfigDescription(
                     "Points for Tropics biome (★★☆☆☆ Moderate)",
                     new AcceptableValueRange<int>(1, 20)
@@ -172,7 +185,7 @@ namespace PEAKCompetitive.Configuration
             var calderaPointsEntry = config.Bind(
                 "BiomePoints",
                 "CalderaPoints",
-                5,
+                2,
                 new ConfigDescription(
                     "Points for Caldera biome (★★★★★ Very Hard)",
                     new AcceptableValueRange<int>(1, 20)
@@ -191,6 +204,26 @@ namespace PEAKCompetitive.Configuration
             );
             KilnPoints = kilnPointsEntry.Value;
 
+            // PvP Settings (multiplayer-mod branch)
+            var enablePvPEntry = config.Bind(
+                "PvP",
+                "EnablePvP",
+                true,
+                "Push enemy players instead of pulling them up (teammates still get pulled)"
+            );
+            EnablePvP = enablePvPEntry.Value;
+
+            var pushForceEntry = config.Bind(
+                "PvP",
+                "PushForce",
+                10.0f,
+                new ConfigDescription(
+                    "How hard to push enemy players (higher = stronger push)",
+                    new AcceptableValueRange<float>(1.0f, 50.0f)
+                )
+            );
+            PushForce = pushForceEntry.Value;
+
             // Debug
             var enableDebugLoggingEntry = config.Bind(
                 "Debug",
@@ -208,11 +241,12 @@ namespace PEAKCompetitive.Configuration
         {
             Plugin.Logger.LogInfo("=== PEAK Competitive Configuration ===");
             Plugin.Logger.LogInfo($"Competitive Mode: {EnableCompetitiveMode}");
-            Plugin.Logger.LogInfo($"Teams: {MaxTeams} teams of {PlayersPerTeam}");
+            Plugin.Logger.LogInfo($"Teams: {MaxTeams} teams of {PlayersPerTeam} (FFA: {FreeForAllMode})");
             Plugin.Logger.LogInfo($"Items Persist: {ItemsPersist}");
             Plugin.Logger.LogInfo($"Individual Bonus: {IndividualCompletionMultiplier}x per survivor");
             Plugin.Logger.LogInfo($"Full Team Bonus: {EnableFullTeamBonus}");
             Plugin.Logger.LogInfo($"Biome Points: Shore={ShorePoints}, Tropics={TropicsPoints}, Mesa={MesaPoints}, Alpine={AlpinePoints}, Roots={RootsPoints}, Caldera={CalderaPoints}, Kiln={KilnPoints}");
+            Plugin.Logger.LogInfo($"PvP: Enabled={EnablePvP}, PushForce={PushForce}");
             Plugin.Logger.LogInfo("=====================================");
         }
 

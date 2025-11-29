@@ -20,6 +20,23 @@ namespace PEAKCompetitive.Util
             var matchState = MatchState.Instance;
             var players = PhotonNetwork.PlayerList;
 
+            // Free-for-all mode: each player is their own team
+            if (Configuration.ConfigurationHandler.FreeForAllMode)
+            {
+                int playerCount = players.Length;
+                matchState.InitializeTeams(playerCount, 1);
+
+                for (int i = 0; i < players.Length; i++)
+                {
+                    matchState.AssignPlayerToTeam(players[i], i);
+                }
+
+                Plugin.Logger.LogInfo($"Free-for-all mode: {playerCount} players, each on their own team");
+                LogTeamAssignments();
+                return;
+            }
+
+            // Normal team mode
             int teamCount = Configuration.ConfigurationHandler.MaxTeams;
             int playersPerTeam = Configuration.ConfigurationHandler.PlayersPerTeam;
 

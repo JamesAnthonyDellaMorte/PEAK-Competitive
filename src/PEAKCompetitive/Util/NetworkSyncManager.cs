@@ -24,11 +24,6 @@ namespace PEAKCompetitive.Util
         private static Character _localCharacter;
         private PhotonView _photonView;
 
-        // Store original nicknames to restore later
-        private string _originalNickName;
-        private bool _nickNameModified = false;
-        private Dictionary<int, string> _originalPlayerNickNames = new Dictionary<int, string>();
-
         public static NetworkSyncManager Instance
         {
             get
@@ -111,115 +106,6 @@ namespace PEAKCompetitive.Util
             PhotonNetwork.CurrentRoom.SetCustomProperties(props);
             Plugin.Logger.LogInfo($"Synced teams: {string.Join(";", teamData)}");
             Plugin.Logger.LogInfo($"Synced scores: {string.Join(";", scoreData)}");
-
-            // Update host nickname with scoreboard so all players can see scores
-            UpdateNicknameWithScoreboard();
-        }
-
-        /// <summary>
-        /// Updates the host's nickname to include team rosters and scores.
-        /// All players can see this when looking at the host's player name tag.
-        /// Format: "R:Name1,Name2=150|B:Name3,Name4=100"
-        /// </summary>
-        private void UpdateNicknameWithScoreboard()
-        {
-            if (!PhotonNetwork.IsMasterClient) return;
-            if (!MatchState.Instance.IsMatchActive) return;
-
-            // Store original nickname on first call
-            if (!_nickNameModified)
-            {
-                _originalNickName = PhotonNetwork.LocalPlayer.NickName;
-                _nickNameModified = true;
-                Plugin.Logger.LogInfo($"Stored original nickname: {_originalNickName}");
-            }
-
-            // Build team roster with scores
-            var matchState = MatchState.Instance;
-            var teamStrings = new List<string>();
-
-            foreach (var team in matchState.Teams.OrderByDescending(t => t.Score))
-            {
-                string teamAbbr = GetTeamAbbreviation(team.TeamId);
-
-                // Get short player names (first name or truncated)
-                var playerNames = team.Members.Select(p => GetShortPlayerName(p)).ToList();
-                string roster = string.Join(",", playerNames);
-
-                teamStrings.Add($"{teamAbbr}:{roster}={team.Score}");
-            }
-
-            string scoreboard = string.Join("|", teamStrings);
-
-            // If too long, fall back to just scores
-            if (scoreboard.Length > 32)
-            {
-                // Try shorter format: just scores
-                var shortStrings = matchState.Teams
-                    .OrderByDescending(t => t.Score)
-                    .Select(t => $"{GetTeamAbbreviation(t.TeamId)}:{t.Score}");
-                scoreboard = string.Join(" ", shortStrings);
-            }
-
-            // Still too long? Truncate
-            if (scoreboard.Length > 32)
-            {
-                scoreboard = scoreboard.Substring(0, 32);
-            }
-
-            PhotonNetwork.LocalPlayer.NickName = scoreboard;
-            Plugin.Logger.LogInfo($"Updated host nickname to: {scoreboard}");
-        }
-
-        /// <summary>
-        /// Get a short version of a player's name (max 6 chars)
-        /// </summary>
-        private string GetShortPlayerName(Photon.Realtime.Player player)
-        {
-            string name = TeamManager.GetPlayerDisplayName(player);
-
-            // If name has space, use first part
-            if (name.Contains(" "))
-            {
-                name = name.Split(' ')[0];
-            }
-
-            // Truncate to 6 chars
-            if (name.Length > 6)
-            {
-                name = name.Substring(0, 6);
-            }
-
-            return name;
-        }
-
-        /// <summary>
-        /// Get a short abbreviation for team display
-        /// </summary>
-        private string GetTeamAbbreviation(int teamId)
-        {
-            switch (teamId)
-            {
-                case 0: return "R";  // Red
-                case 1: return "B";  // Blue
-                case 2: return "G";  // Green
-                case 3: return "Y";  // Yellow
-                case 4: return "P";  // Purple
-                default: return $"T{teamId}";
-            }
-        }
-
-        /// <summary>
-        /// Restore the host's original nickname when match ends
-        /// </summary>
-        public void RestoreOriginalNickname()
-        {
-            if (_nickNameModified && !string.IsNullOrEmpty(_originalNickName))
-            {
-                PhotonNetwork.LocalPlayer.NickName = _originalNickName;
-                _nickNameModified = false;
-                Plugin.Logger.LogInfo($"Restored original nickname: {_originalNickName}");
-            }
         }
 
         // Handle room property changes
@@ -292,16 +178,21 @@ namespace PEAKCompetitive.Util
 
             var matchState = MatchState.Instance;
 
-            // Initialize teams if needed
-            if (matchState.Teams.Count == 0)
+            // Parse "teamId:actorNum1,actorNum2;teamId:..."
+            string[] teams = teamData.Split(';');
+
+            // Count how many teams the host sent (for FFA mode support)
+            int teamCount = teams.Count(t => !string.IsNullOrEmpty(t));
+
+            // Initialize teams based on what host sent, not local config
+            if (matchState.Teams.Count != teamCount)
             {
-                matchState.InitializeTeams(ConfigurationHandler.MaxTeams, ConfigurationHandler.PlayersPerTeam);
+                matchState.InitializeTeams(teamCount, 1);
+                Plugin.Logger.LogInfo($"Initialized {teamCount} teams from host data");
             }
 
             Plugin.Logger.LogInfo($"Applying team assignments: {teamData}");
 
-            // Parse "teamId:actorNum1,actorNum2;teamId:..."
-            string[] teams = teamData.Split(';');
             foreach (string teamInfo in teams)
             {
                 if (string.IsNullOrEmpty(teamInfo)) continue;
@@ -420,43 +311,65 @@ namespace PEAKCompetitive.Util
             }
         }
 
-        // Sync revive all players
+        // Sync revive all players (only teleport those who didn't reach campfire)
         public void SyncReviveAllPlayers(Vector3? teleportPosition)
         {
             if (!PhotonNetwork.IsMasterClient) return;
             Plugin.Logger.LogInfo("Syncing revive all players event");
 
-            if (_photonView != null)
+            // Collect all players who DID reach the campfire (they don't need teleporting)
+            var playersWhoReached = new HashSet<int>();
+            foreach (var team in MatchState.Instance.Teams)
             {
-                // Serialize position as float array or send null flag
-                if (teleportPosition.HasValue)
+                foreach (int actorNum in team.PlayersWhoReached)
                 {
-                    float[] pos = new float[] { teleportPosition.Value.x, teleportPosition.Value.y, teleportPosition.Value.z };
-                    _photonView.RPC("RPC_ReviveAllPlayers", RpcTarget.All, pos);
-                }
-                else
-                {
-                    _photonView.RPC("RPC_ReviveAllPlayers", RpcTarget.All, null);
+                    playersWhoReached.Add(actorNum);
                 }
             }
-        }
 
-        [PunRPC]
-        private void RPC_ReviveAllPlayers(float[] position)
-        {
-            Plugin.Logger.LogInfo("RPC_ReviveAllPlayers received - reviving local character");
+            Plugin.Logger.LogInfo($"Players who reached campfire: [{string.Join(", ", playersWhoReached)}] - these will NOT be teleported");
 
-            var localChar = CharacterHelper.GetLocalCharacter();
-            if (localChar != null)
+            // HOST directly calls RPCA_ReviveAtPosition for all players who need teleporting
+            // This is more reliable than having clients teleport themselves
+            if (teleportPosition.HasValue)
             {
-                CharacterHelper.ReviveCharacter(localChar);
+                Vector3 revivePos = teleportPosition.Value + Vector3.up * 2f;
 
-                // Teleport if position provided
-                if (position != null && position.Length == 3)
+                foreach (var character in Character.AllCharacters)
                 {
-                    Vector3 teleportPos = new Vector3(position[0], position[1], position[2]);
-                    CharacterHelper.TeleportCharacter(localChar, teleportPos);
-                    Plugin.Logger.LogInfo($"Teleported to {teleportPos}");
+                    if (character == null || character.view?.Owner == null) continue;
+
+                    int actorNum = character.view.Owner.ActorNumber;
+                    bool alreadyAtCampfire = playersWhoReached.Contains(actorNum);
+
+                    if (alreadyAtCampfire)
+                    {
+                        // Player already at campfire - just revive in place
+                        Plugin.Logger.LogInfo($"Player {actorNum} already at campfire - reviving in place");
+                        character.photonView.RPC("RPCA_Revive", RpcTarget.All, new object[] { false });
+                    }
+                    else
+                    {
+                        // Player needs teleporting - use RPCA_ReviveAtPosition
+                        Plugin.Logger.LogInfo($"Player {actorNum} needs teleporting - using RPCA_ReviveAtPosition to {revivePos}");
+                        character.photonView.RPC("RPCA_ReviveAtPosition", RpcTarget.All, new object[]
+                        {
+                            revivePos,
+                            true // poof effect
+                        });
+                    }
+                }
+            }
+            else
+            {
+                // No teleport position - just revive all in place
+                Plugin.Logger.LogWarning("No teleport position - reviving all players in place");
+                foreach (var character in Character.AllCharacters)
+                {
+                    if (character != null)
+                    {
+                        character.photonView.RPC("RPCA_Revive", RpcTarget.All, new object[] { false });
+                    }
                 }
             }
         }
@@ -528,40 +441,34 @@ namespace PEAKCompetitive.Util
             team.RecordArrival(playerActorNumber, isGhost);
             Plugin.Logger.LogInfo($"Player {playerActorNumber} from {team.TeamName} reached! ({team.PlayersWhoReached.Count}/{team.Members.Count}, ghost: {isGhost})");
 
-            // Check if this is the first player from this team (to set placement)
-            if (team.FinishPlacement == 0)
+            // Mark team as having reached (for round end detection)
+            if (!team.HasReachedSummit)
             {
-                // First member arrived - determine placement
-                int placement = GetNextPlacement();
-                team.FinishPlacement = placement;
                 team.HasReachedSummit = true;
-
-                Plugin.Logger.LogInfo($"{team.TeamName} is #{placement} to reach the campfire!");
-
-                // Start timer when first team arrives
-                if (placement == 1)
-                {
-                    Plugin.Logger.LogInfo("First team arrived - starting 10-minute timer!");
-                    RoundTimerManager.Instance.StartTimer();
-                }
             }
 
-            // Count non-ghost members who reached (using tracked ghost status at arrival time)
-            int nonGhostArrivals = team.GetNonGhostArrivals();
-            Plugin.Logger.LogInfo($"{team.TeamName}: {nonGhostArrivals} non-ghost members reached, {team.GhostPlayersWhoReached.Count} ghosts (ghosts don't count)");
+            // Start timer when first player arrives
+            if (matchState.NextArrivalPlacement == 1)
+            {
+                Plugin.Logger.LogInfo("First player arrived - starting 10-minute timer!");
+                RoundTimerManager.Instance.StartTimer();
+            }
 
-            // Calculate and award points immediately for this arrival (if not a ghost)
+            // Calculate and award points based on INDIVIDUAL player placement (if not a ghost)
             if (!isGhost)
             {
+                int playerPlacement = matchState.NextArrivalPlacement;
+                matchState.NextArrivalPlacement++; // Increment for next player
+
                 int baseMapPoints = Configuration.ConfigurationHandler.GetMapPoints(matchState.CurrentMapName);
-                float placementMultiplier = GetPlacementMultiplier(team.FinishPlacement);
+                float placementMultiplier = GetPlacementMultiplier(playerPlacement);
                 int pointsForThisPlayer = (int)(baseMapPoints * placementMultiplier);
 
-                // Use Score directly instead of AddScore to avoid incrementing RoundsWon multiple times
+                // Award points to team
                 team.Score += pointsForThisPlayer;
                 Plugin.Logger.LogInfo($"=== POINTS AWARDED ===");
-                Plugin.Logger.LogInfo($"{team.TeamName} +{pointsForThisPlayer} points! (Placement #{team.FinishPlacement}: {placementMultiplier:F1}x × {baseMapPoints} base)");
-                Plugin.Logger.LogInfo($"{team.TeamName} new total: {team.Score} points");
+                Plugin.Logger.LogInfo($"Player #{playerPlacement} arrived! {placementMultiplier * 100:F0}% × {baseMapPoints} base = {pointsForThisPlayer} points");
+                Plugin.Logger.LogInfo($"{team.TeamName} +{pointsForThisPlayer} points! New total: {team.Score}");
             }
             else
             {
@@ -602,20 +509,14 @@ namespace PEAKCompetitive.Util
 
         /// <summary>
         /// Get point multiplier based on placement
-        /// 1st place = 1.0x (100%)
-        /// 2nd place = 0.7x (70%)
-        /// 3rd place = 0.5x (50%)
-        /// 4th+ place = 0.3x (30%)
+        /// Each placement loses 25% (a quarter):
+        /// 1st = 100%, 2nd = 75%, 3rd = 50%, 4th = 25%, 5th+ = 0%
+        /// Formula: 1.0 - (0.25 × (placement - 1)), minimum 0
         /// </summary>
         private float GetPlacementMultiplier(int placement)
         {
-            switch (placement)
-            {
-                case 1: return 1.0f;  // 1st place: full points
-                case 2: return 0.7f;  // 2nd place: 70%
-                case 3: return 0.5f;  // 3rd place: 50%
-                default: return 0.3f; // 4th+: 30%
-            }
+            float multiplier = 1.0f - (0.25f * (placement - 1));
+            return Mathf.Max(0f, multiplier);
         }
 
         private bool AllTeamsFinished()
