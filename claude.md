@@ -589,8 +589,9 @@ if (_killMethod != null)
 - `CharacterHelper.cs` - PEAK game integration
 
 **Patches:**
-- `CampfireInteractionPatch.cs` - Detects campfire arrivals
-- `SummitDetectionPatch.cs` - Placeholder for future summit detection
+- `CampfireInteractionPatch.cs` - Detects when campfires are LIT (not proximity)
+- `RespawnChestPatch.cs` - Team-based revival at checkpoint statues
+- `ProximityChatPatch.cs` - Global voice for FFA mode only
 
 **UI:**
 - `ScoreboardUI.cs` - Live scoreboard display
@@ -628,6 +629,249 @@ Fly mode is compiled out in Release builds - no temptation when playing for real
 
 ---
 
+## CRITICAL: Revival System (RPCA_ReviveAtPosition)
+
+**THIS IS ESSENTIAL KNOWLEDGE - READ CAREFULLY!**
+
+The game's revival RPC has a critical parameter that's easy to misunderstand:
+
+```csharp
+// Decompiled from Character.cs lines 1441-1449
+internal void RPCA_ReviveAtPosition(Vector3 position, bool applyStatus)
+{
+    this.refs.items.DropAllItems(true);
+    this.RPCA_Revive(applyStatus);  // <-- The key!
+    this.WarpPlayer(position, true);
+    // ...
+}
+
+// And RPCA_Revive (lines 1416-1437):
+internal void RPCA_Revive(bool applyStatus)
+{
+    // ... clears death state, afflictions, etc ...
+
+    if (applyStatus)  // <-- WATCH OUT!
+    {
+        this.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Curse, 0.05f, false, true);
+        this.refs.afflictions.AddStatus(CharacterAfflictions.STATUSTYPE.Hunger, 0.3f, false, true);
+    }
+}
+```
+
+**The `applyStatus` parameter:**
+- `true` = Add 30% Hunger + 5% Curse after revival (vanilla punishment for dying)
+- `false` = Clean revival with NO penalties
+
+**For competitive mode, ALWAYS use `false`:**
+```csharp
+character.photonView.RPC("RPCA_ReviveAtPosition", RpcTarget.All, new object[]
+{
+    position,
+    false  // applyStatus=false means NO hunger/curse penalty!
+});
+```
+
+**Common mistake:** The parameter was incorrectly documented as "poof" (visual effect) in early code. It is NOT a visual toggle - it controls status penalties!
+
+---
+
+## Campfire Detection System
+
+### Why Light_Rpc, Not Proximity Detection
+
+**WRONG approach (causes issues):**
+```csharp
+// DON'T DO THIS - causes repeated triggers, wrong campfire detection
+[HarmonyPatch(typeof(Campfire), "Awake")]
+public class BadCampfirePatch
+{
+    static void Postfix(Campfire __instance)
+    {
+        // Add proximity detection component - BAD!
+        __instance.gameObject.AddComponent<ProximityDetector>();
+    }
+}
+```
+
+**RIGHT approach (hook when campfire is actually lit):**
+```csharp
+// Campfire.Light_Rpc is called ONLY when vanilla confirms all players are in range
+[HarmonyPatch(typeof(Campfire), "Light_Rpc")]
+public class CampfireLightPatch
+{
+    static void Postfix(Campfire __instance)
+    {
+        // Only fires when campfire is ACTUALLY lit
+        // Vanilla already validated all players are nearby
+        ProcessCampfireCompletion(__instance);
+    }
+}
+```
+
+**Why this matters:**
+1. Vanilla game shows "Player X is 50m away" until everyone is in range
+2. Vanilla handles the "waiting for players" logic
+3. `Light_Rpc` only fires when the campfire animation plays and everyone advances
+4. No need to track distances ourselves - vanilla does it correctly
+
+### Target Segment Tracking
+
+Each campfire has `advanceToSegment` indicating which biome it leads to:
+
+```csharp
+// Segment enum (from PEAK):
+// Beach, Tropics, Mesa, Alpine, Roots, Caldera, TheKiln, Peak
+
+// When on Shore, target the Tropics campfire
+// When on Tropics, target the Alpine campfire (skips Mesa internally)
+// etc.
+
+private static Segment GetTargetSegmentForMap(string mapName)
+{
+    mapName = mapName?.ToLower() ?? "";
+
+    if (mapName.Contains("shore")) return Segment.Tropics;
+    if (mapName.Contains("tropic")) return Segment.Alpine;
+    if (mapName.Contains("alpine")) return Segment.Caldera;
+    if (mapName.Contains("caldera")) return Segment.TheKiln;
+    if (mapName.Contains("kiln")) return Segment.Peak;
+
+    return Segment.Tropics; // Default
+}
+```
+
+---
+
+## Voice Chat / Proximity System
+
+### How Proximity Chat Works in PEAK
+
+PEAK uses Photon Voice with spatial audio. Key file: `CharacterVoiceHandler.cs`
+
+```csharp
+// CharacterVoiceHandler.LateUpdate() - line 130
+this.m_source.spatialBlend = (float)(flag ? 0 : 1);
+```
+
+- `spatialBlend = 1.0` = Full 3D spatial audio (proximity-based, can only hear nearby)
+- `spatialBlend = 0.0` = No spatial blend (global, hear everyone equally)
+
+### Disabling Proximity for FFA Mode
+
+```csharp
+[HarmonyPatch(typeof(CharacterVoiceHandler), "LateUpdate")]
+public class ProximityChatPatch
+{
+    static void Postfix(CharacterVoiceHandler __instance)
+    {
+        // ONLY apply in Free-for-All mode!
+        // Team mode MUST keep proximity chat
+        if (!ConfigurationHandler.EnableCompetitiveMode) return;
+        if (!ConfigurationHandler.FreeForAllMode) return;
+        if (!ConfigurationHandler.DisableProximityChat) return;
+
+        var audioSource = __instance.audioSource;
+        if (audioSource != null)
+        {
+            audioSource.spatialBlend = 0f;  // Global audio
+        }
+    }
+}
+```
+
+**CRITICAL:** Only disable proximity in FFA mode! Team mode requires proximity chat so you can only hear nearby teammates/enemies.
+
+---
+
+## Harmony Patch Re-Entry Detection
+
+When patching methods that might call themselves (or methods you also patch), use a re-entry flag:
+
+```csharp
+[HarmonyPatch(typeof(RespawnChest), "SpawnItems")]
+public class RespawnChestPatch
+{
+    // Flag to detect when we're re-entering
+    private static bool _allowOriginal = false;
+
+    static bool Prefix(RespawnChest __instance, ref List<PhotonView> __result)
+    {
+        // Check for re-entry
+        if (_allowOriginal)
+        {
+            // We set this flag - let original run
+            return true;
+        }
+
+        // ... do custom logic ...
+
+        // If we need original behavior for some code path:
+        if (needOriginalBehavior)
+        {
+            return true;  // Let original run
+        }
+
+        // If calling methods that might trigger this patch again:
+        _allowOriginal = true;
+        try
+        {
+            // Call something that might re-enter
+            someMethod.Invoke(...);
+        }
+        finally
+        {
+            _allowOriginal = false;  // Always reset!
+        }
+
+        __result = new List<PhotonView>();
+        return false;  // Skip original
+    }
+}
+```
+
+---
+
+## Round Transition Sequence (Detailed)
+
+The full sequence when transitioning between rounds:
+
+```
+1. CampfireLightPatch detects target campfire is lit
+   ↓
+2. ProcessCampfireCompletion() awards points to nearby teams
+   ↓
+3. If first team: RoundTimerManager.StartTimer() (10 min countdown)
+   ↓
+4. NetworkSyncManager.SyncTeamScores() updates all clients
+   ↓
+5. If AllTeamsFinished() or timer expires:
+   ↓
+6. RoundTransitionManager.StartTransition() begins coroutine:
+   │
+   ├─ MatchState.IsRoundActive = false (prevents re-detection)
+   │
+   ├─ NetworkSyncManager.SyncKillAllPlayers() → RPC_KillAllPlayers
+   │   └─ Each client kills their own character
+   │
+   ├─ Wait 2 seconds
+   │
+   ├─ CharacterHelper.GetNextCampfirePosition() finds target campfire
+   │
+   ├─ NetworkSyncManager.SyncReviveAllPlayers(position)
+   │   └─ Host calls RPCA_ReviveAtPosition for each character
+   │   └─ Uses applyStatus=false (no hunger penalty!)
+   │
+   ├─ Wait 1 second
+   │
+   └─ StartNextRound():
+       ├─ Reset timer, team states, chest tracking
+       ├─ CampfireInteraction.SetRoundTarget(nextSegment)
+       ├─ MatchState.StartRound(nextMapName)
+       └─ NetworkSyncManager.SyncRoundStart(nextMapName)
+```
+
+---
+
 ## Recent Changes
 
 ### 2025-11-25 - Fly Mode & Campfire Detection Fixes
@@ -647,7 +891,15 @@ Fly mode is compiled out in Release builds - no temptation when playing for real
 - ✅ Fixed network synchronization - all players see scoreboard updates
 - ✅ Added comprehensive debug logging for score sync verification
 
-**Last Updated:** 2025-11-25
+### 2025-11-29 - Campfire Detection Rewrite & Revival Fixes
+- ✅ Rewrote campfire detection to use `Light_Rpc` instead of proximity detection
+- ✅ Vanilla game now handles "waiting for all players" - we just hook when campfire is lit
+- ✅ Fixed revival hunger penalty - `applyStatus=false` prevents 30% hunger + 5% curse
+- ✅ Added global voice chat option for Free-for-All mode only
+- ✅ Fixed teleportation to use correct campfire position based on current map
+- ✅ Team mode proximity chat is completely unaffected by global voice setting
+
+**Last Updated:** 2025-11-29
 **Build Status:** ✅ Passing (0 Warnings, 0 Errors)
 **Output:** PEAKCompetitive.dll (Release) / PEAKCompetitive.dll (Debug with fly mode)
 **Decompiled Source:** C:\Users\della\Desktop\Assembly-CSharp
