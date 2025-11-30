@@ -29,6 +29,7 @@ namespace PEAKCompetitive.Configuration
             "Enable Competitive Mode",
             "Show Scoreboard",
             "Free-for-All Mode",
+            "Global Voice Chat",
             "Start Match",
             "End Match",
             "Reassign Teams"
@@ -165,7 +166,7 @@ namespace PEAKCompetitive.Configuration
                 }
 
                 string label = GetOptionLabel(i);
-                bool enabled = isHost || i < 3; // Non-hosts can see toggles but not activate buttons
+                bool enabled = isHost || i < 4; // Non-hosts can see toggles but not activate buttons
 
                 GUI.enabled = enabled;
                 if (GUI.Button(rowRect, label, _rowStyle))
@@ -214,9 +215,10 @@ namespace PEAKCompetitive.Configuration
                 case 0: return $"Competitive Mode: {(ConfigurationHandler.EnableCompetitiveMode ? "ON" : "OFF")}";
                 case 1: return $"Show Scoreboard: {(ConfigurationHandler.ShowScoreboard ? "ON" : "OFF")}";
                 case 2: return $"Free-for-All: {(ConfigurationHandler.FreeForAllMode ? "ON" : "OFF")}";
-                case 3: return "► Start Match";
-                case 4: return "■ End Match";
-                case 5: return "↻ Reassign Teams";
+                case 3: return $"Global Voice Chat: {(ConfigurationHandler.DisableProximityChat ? "ON" : "OFF")}";
+                case 4: return "► Start Match";
+                case 5: return "■ End Match";
+                case 6: return "↻ Reassign Teams";
                 default: return _menuOptions[index];
             }
         }
@@ -235,12 +237,15 @@ namespace PEAKCompetitive.Configuration
                     ConfigurationHandler.FreeForAllMode = !ConfigurationHandler.FreeForAllMode;
                     break;
                 case 3:
-                    StartMatch();
+                    ConfigurationHandler.DisableProximityChat = !ConfigurationHandler.DisableProximityChat;
                     break;
                 case 4:
-                    EndMatch();
+                    StartMatch();
                     break;
                 case 5:
+                    EndMatch();
+                    break;
+                case 6:
                     ReassignTeams();
                     break;
             }

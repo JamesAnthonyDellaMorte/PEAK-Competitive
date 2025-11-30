@@ -160,11 +160,11 @@ namespace PEAKCompetitive.Util
             {
                 // Use the game's RPCA_ReviveAtPosition RPC
                 // This properly handles both revival AND positioning in multiplayer
-                // Second parameter is 'poof' (visual effect)
+                // Second parameter is 'applyStatus' - when false, no hunger/curse penalty
                 character.photonView.RPC("RPCA_ReviveAtPosition", Photon.Pun.RpcTarget.All, new object[]
                 {
                     position + Vector3.up * 2f, // Slight offset above ground to prevent clipping
-                    true // poof effect
+                    false // applyStatus=false means NO hunger/curse penalty
                 });
                 Plugin.Logger.LogInfo($"Called RPCA_ReviveAtPosition to {position} for character");
             }

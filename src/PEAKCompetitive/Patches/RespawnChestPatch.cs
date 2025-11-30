@@ -136,7 +136,7 @@ namespace PEAKCompetitive.Patches
                     teammate.photonView.RPC("RPCA_ReviveAtPosition", RpcTarget.All, new object[]
                     {
                         __instance.transform.position + Vector3.up * 8f,
-                        true // poof effect
+                        false // applyStatus=false means NO hunger/curse penalty
                     });
                     Plugin.Logger.LogInfo($"  Revived: {TeamManager.GetPlayerDisplayName(teammate.view.Owner)}");
                 }

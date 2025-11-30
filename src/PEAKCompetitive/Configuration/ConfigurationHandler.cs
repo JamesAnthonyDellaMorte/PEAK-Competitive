@@ -15,6 +15,7 @@ namespace PEAKCompetitive.Configuration
         public static int MaxTeams { get; private set; }
         public static int PlayersPerTeam { get; private set; }
         public static bool FreeForAllMode { get; set; }  // Each player is their own team
+        public static bool DisableProximityChat { get; set; }  // Global voice chat (hear everyone)
 
         // Match Settings
         public static bool ItemsPersist { get; set; }
@@ -89,6 +90,14 @@ namespace PEAKCompetitive.Configuration
                 "Free-for-all mode - each player is their own team (ignores MaxTeams/PlayersPerTeam)"
             );
             FreeForAllMode = freeForAllEntry.Value;
+
+            var disableProximityChatEntry = config.Bind(
+                "Teams",
+                "DisableProximityChat",
+                true,
+                "Disable proximity chat in competitive mode - everyone can hear each other regardless of distance"
+            );
+            DisableProximityChat = disableProximityChatEntry.Value;
 
             // Match Settings
             var itemsPersistEntry = config.Bind(
@@ -241,7 +250,7 @@ namespace PEAKCompetitive.Configuration
         {
             Plugin.Logger.LogInfo("=== PEAK Competitive Configuration ===");
             Plugin.Logger.LogInfo($"Competitive Mode: {EnableCompetitiveMode}");
-            Plugin.Logger.LogInfo($"Teams: {MaxTeams} teams of {PlayersPerTeam} (FFA: {FreeForAllMode})");
+            Plugin.Logger.LogInfo($"Teams: {MaxTeams} teams of {PlayersPerTeam} (FFA: {FreeForAllMode}, GlobalVoice: {DisableProximityChat})");
             Plugin.Logger.LogInfo($"Items Persist: {ItemsPersist}");
             Plugin.Logger.LogInfo($"Individual Bonus: {IndividualCompletionMultiplier}x per survivor");
             Plugin.Logger.LogInfo($"Full Team Bonus: {EnableFullTeamBonus}");

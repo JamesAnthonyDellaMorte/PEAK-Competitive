@@ -393,7 +393,7 @@ namespace PEAKCompetitive.Util
                         character.photonView.RPC("RPCA_ReviveAtPosition", RpcTarget.All, new object[]
                         {
                             revivePos,
-                            true // poof effect
+                            false // applyStatus=false means NO hunger/curse penalty
                         });
                     }
                 }
